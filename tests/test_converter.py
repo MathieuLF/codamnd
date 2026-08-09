@@ -15,11 +15,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from employeurd_megagest.config import load_app_config
-from employeurd_megagest.converter import convert_file
-from employeurd_megagest.audit_log import write_audit_event
-from employeurd_megagest.errors import ValidationFailed
-from employeurd_megagest.app_gui import (
+from codamnd.config import load_app_config
+from codamnd.converter import convert_file
+from codamnd.audit_log import write_audit_event
+from codamnd.errors import ValidationFailed
+from codamnd.app_gui import (
     SECURITY_TOOLTIP_TEXT,
     _generated_outputs_message,
     _journal_summary_block,
@@ -29,13 +29,13 @@ from employeurd_megagest.app_gui import (
     _validation_mode_style,
     _validation_mode_text,
 )
-from employeurd_megagest.gui_controller import GuiController, GuiOperationResult
-from employeurd_megagest.gui_state import GuiViewState, build_file_preview, build_metrics, build_output_preview, default_output_root, summary_text
-from employeurd_megagest.integrity import IntegrityCheckResult, app_package_sha256, check_running_app_integrity, signature_status
-from employeurd_megagest.output_plan import build_output_plan
-from employeurd_megagest.parser_employeurd import parse_employeurd_file, parse_employeurd_line
-from employeurd_megagest.parser_mnd import parse_mnd_file, parse_mnd_text
-from employeurd_megagest.preferences import (
+from codamnd.gui_controller import GuiController, GuiOperationResult
+from codamnd.gui_state import GuiViewState, build_file_preview, build_metrics, build_output_preview, default_output_root, summary_text
+from codamnd.integrity import IntegrityCheckResult, app_package_sha256, check_running_app_integrity, signature_status
+from codamnd.output_plan import build_output_plan
+from codamnd.parser_employeurd import parse_employeurd_file, parse_employeurd_line
+from codamnd.parser_mnd import parse_mnd_file, parse_mnd_text
+from codamnd.preferences import (
     AppPreferences,
     ensure_preferences_dir,
     load_preferences,
@@ -43,13 +43,13 @@ from employeurd_megagest.preferences import (
     remember_update_check_on_startup,
     save_preferences,
 )
-from employeurd_megagest.reconciliation import reconcile_control_report, reconcile_gl_detail, reconciliation_failed
-from employeurd_megagest.reports.gl_detail_pdf_parser import parse_gl_detail_pdf
-from employeurd_megagest.resource_paths import package_asset_path
-from employeurd_megagest.update_check import DEFAULT_TIMEOUT_SECONDS, DEFAULT_UPDATE_URL, GITHUB_RELEASE_PAGE_BYTES, check_for_update
-from employeurd_megagest.validator import convert_account, mnd_totals, source_totals
-from employeurd_megagest.version import __version__
-from employeurd_megagest.writer_mnd import MND_LINE_LENGTH
+from codamnd.reconciliation import reconcile_control_report, reconcile_gl_detail, reconciliation_failed
+from codamnd.reports.gl_detail_pdf_parser import parse_gl_detail_pdf
+from codamnd.resource_paths import package_asset_path
+from codamnd.update_check import DEFAULT_TIMEOUT_SECONDS, DEFAULT_UPDATE_URL, GITHUB_RELEASE_PAGE_BYTES, check_for_update
+from codamnd.validator import convert_account, mnd_totals, source_totals
+from codamnd.version import __version__
+from codamnd.writer_mnd import MND_LINE_LENGTH
 from scripts import agent_validate, append_release_verification, audit_release_readiness, generate_release_manifest, submit_virustotal
 from scripts.submit_virustotal import collect_detections
 
@@ -147,7 +147,7 @@ def _write_synthetic_gl_detail_pdf(
     path.write_bytes(payload)
 
 
-class EmployeurDMegaGestTest(unittest.TestCase):
+class CodaMNDTest(unittest.TestCase):
     def config(self):
         root = Path(__file__).resolve().parents[1]
         return load_app_config(root / "config")
@@ -166,7 +166,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
 
         self.assertTrue(package_asset_path("app-icon.png").exists())
-        self.assertTrue((root / "packaging" / "windows" / "EmployeurD-MegaGest.ico").exists())
+        self.assertTrue((root / "packaging" / "windows" / "CodaMND.ico").exists())
         self.assertTrue((root / "docs" / "assets" / "product-icon.png").exists())
         self.assertIn("--icon", (root / "scripts" / "build_exe.ps1").read_text(encoding="utf-8"))
 
@@ -318,7 +318,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertNotIn("VirusTotal", SECURITY_TOOLTIP_TEXT)
 
     def test_gui_gates_silent_update_check_with_startup_preference_and_default_channel(self) -> None:
-        source = (Path(__file__).resolve().parents[1] / "src" / "employeurd_megagest" / "app_gui.py").read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parents[1] / "src" / "codamnd" / "app_gui.py").read_text(encoding="utf-8")
 
         self.assertIn('default_update_check_on_startup=self.app_config.updates.get("check_on_startup") is True', source)
         self.assertIn("if self.preferences.update_check_on_startup:", source)
@@ -532,7 +532,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertNotIn("C:/secret", payload)
 
     def test_update_check_uses_manifest_without_payroll_data(self) -> None:
-        with patch("employeurd_megagest.update_check._fetch_json") as fetch:
+        with patch("codamnd.update_check._fetch_json") as fetch:
             fetch.return_value = {
                 "latest_version": "0.1.1",
                 "download_url": "https://example.invalid/app.exe",
@@ -567,24 +567,24 @@ class EmployeurDMegaGestTest(unittest.TestCase):
     def test_update_check_reads_github_release_assets(self) -> None:
         expected_hash = "a" * 64
         with (
-            patch("employeurd_megagest.update_check._fetch_json") as fetch_json,
-            patch("employeurd_megagest.update_check._fetch_text") as fetch_text,
+            patch("codamnd.update_check._fetch_json") as fetch_json,
+            patch("codamnd.update_check._fetch_text") as fetch_text,
         ):
             fetch_json.return_value = {
                 "tag_name": "v0.1.1",
                 "html_url": "https://example.invalid/releases/v0.1.1",
                 "assets": [
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.1-portable.zip",
+                        "name": "CodaMND-v0.1.1-portable.zip",
                         "browser_download_url": "https://example.invalid/app-portable.zip",
                     },
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.1-portable.zip.sha256",
+                        "name": "CodaMND-v0.1.1-portable.zip.sha256",
                         "browser_download_url": "https://example.invalid/app.zip.sha256",
                     },
                 ],
             }
-            fetch_text.return_value = f"{expected_hash.upper()}  EmployeurD-MegaGest-v0.1.1-portable.zip"
+            fetch_text.return_value = f"{expected_hash.upper()}  CodaMND-v0.1.1-portable.zip"
 
             result = check_for_update("https://updates.example.invalid/latest.json", current_version="0.1.0")
 
@@ -594,13 +594,13 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertEqual(result.release_page_url, "https://example.invalid/releases/v0.1.1")
 
     def test_update_check_uses_release_page_when_only_exe_asset_exists(self) -> None:
-        with patch("employeurd_megagest.update_check._fetch_json") as fetch_json:
+        with patch("codamnd.update_check._fetch_json") as fetch_json:
             fetch_json.return_value = {
                 "tag_name": "v0.1.2",
                 "html_url": "https://example.invalid/releases/v0.1.2",
                 "assets": [
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.2.exe",
+                        "name": "CodaMND-v0.1.2.exe",
                         "browser_download_url": "https://example.invalid/app.exe",
                     },
                 ],
@@ -614,7 +614,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertEqual(result.download_url, "https://example.invalid/releases/v0.1.2")
 
     def test_update_check_uses_default_url_when_config_is_blank_or_placeholder(self) -> None:
-        with patch("employeurd_megagest.update_check._fetch_github_release_page_payload") as fetch:
+        with patch("codamnd.update_check._fetch_github_release_page_payload") as fetch:
             fetch.return_value = {"tag_name": "v0.1.0", "html_url": "https://example.invalid/release"}
 
             blank = check_for_update("", current_version="0.1.0")
@@ -631,7 +631,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
     def test_update_check_reports_missing_public_release_cleanly(self) -> None:
         url = "https://updates.example.invalid/latest.json"
         error = urllib.error.HTTPError(url, 404, "Not Found", {}, None)
-        with patch("employeurd_megagest.update_check._fetch_json", side_effect=error):
+        with patch("codamnd.update_check._fetch_json", side_effect=error):
             result = check_for_update(url, current_version="0.1.0")
 
         self.assertFalse(result.ok)
@@ -639,7 +639,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
 
     def test_update_check_reports_timeout_cleanly(self) -> None:
         url = "https://updates.example.invalid/latest.json"
-        with patch("employeurd_megagest.update_check._fetch_json", side_effect=TimeoutError("The read operation timed out")):
+        with patch("codamnd.update_check._fetch_json", side_effect=TimeoutError("The read operation timed out")):
             result = check_for_update(url, current_version="0.1.0")
 
         self.assertFalse(result.ok)
@@ -649,7 +649,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
     def test_update_check_reports_temporary_github_error_cleanly(self) -> None:
         url = "https://updates.example.invalid/latest.json"
         error = urllib.error.HTTPError(url, 504, "Gateway Timeout", {}, None)
-        with patch("employeurd_megagest.update_check._fetch_json", side_effect=error):
+        with patch("codamnd.update_check._fetch_json", side_effect=error):
             result = check_for_update(url, current_version="0.1.0")
 
         self.assertFalse(result.ok)
@@ -657,22 +657,22 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertIn("HTTP 504", result.message)
 
     def test_update_check_reports_invalid_custom_url_without_crashing(self) -> None:
-        with patch("employeurd_megagest.update_check._fetch_json", side_effect=ValueError("unknown url type")):
+        with patch("codamnd.update_check._fetch_json", side_effect=ValueError("unknown url type")):
             result = check_for_update("not a url", current_version="0.1.0")
 
         self.assertFalse(result.ok)
         self.assertIn("Vérification impossible", result.message)
 
-    def test_update_check_uses_fast_github_release_page_before_api(self) -> None:
+    def test_update_check_uses_legacy_name_for_already_published_release(self) -> None:
         expected_hash = "c" * 64
         with (
-            patch("employeurd_megagest.update_check._fetch_json") as fetch_json,
-            patch("employeurd_megagest.update_check._fetch_text_response") as fetch_page,
-            patch("employeurd_megagest.update_check._fetch_text", return_value=f"{expected_hash}  app.zip"),
+            patch("codamnd.update_check._fetch_json") as fetch_json,
+            patch("codamnd.update_check._fetch_text_response") as fetch_page,
+            patch("codamnd.update_check._fetch_text", return_value=f"{expected_hash}  app.zip"),
         ):
             fetch_page.return_value = SimpleNamespace(
                 text="",
-                final_url="https://github.com/MathieuLF/employeurd-coda-megagest/releases/tag/v0.1.0",
+                final_url="https://github.com/MathieuLF/codamnd/releases/tag/v0.1.0",
             )
 
             result = check_for_update(DEFAULT_UPDATE_URL, current_version="0.1.0")
@@ -685,17 +685,38 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertEqual(fetch_page.call_args.kwargs["max_bytes"], GITHUB_RELEASE_PAGE_BYTES)
         self.assertEqual(
             result.download_url,
-            "https://github.com/MathieuLF/employeurd-coda-megagest/releases/download/v0.1.0/EmployeurD-MegaGest-v0.1.0-portable.zip",
+            "https://github.com/MathieuLF/codamnd/releases/download/v0.1.0/EmployeurD-MegaGest-v0.1.0-portable.zip",
         )
         self.assertEqual(
             result.release_page_url,
-            "https://github.com/MathieuLF/employeurd-coda-megagest/releases/tag/v0.1.0",
+            "https://github.com/MathieuLF/codamnd/releases/tag/v0.1.0",
+        )
+
+    def test_update_check_uses_codamnd_name_for_future_release(self) -> None:
+        expected_hash = "d" * 64
+        with (
+            patch("codamnd.update_check._fetch_json") as fetch_json,
+            patch("codamnd.update_check._fetch_text_response") as fetch_page,
+            patch("codamnd.update_check._fetch_text", return_value=f"{expected_hash}  app.zip"),
+        ):
+            fetch_page.return_value = SimpleNamespace(
+                text="",
+                final_url="https://github.com/MathieuLF/codamnd/releases/tag/v0.1.5",
+            )
+
+            result = check_for_update(DEFAULT_UPDATE_URL, current_version="0.1.4")
+
+        self.assertTrue(result.ok)
+        fetch_json.assert_not_called()
+        self.assertEqual(
+            result.download_url,
+            "https://github.com/MathieuLF/codamnd/releases/download/v0.1.5/CodaMND-v0.1.5-portable.zip",
         )
 
     def test_github_update_check_fails_fast_without_api_retry(self) -> None:
         with (
-            patch("employeurd_megagest.update_check._fetch_text_response", side_effect=TimeoutError("slow")),
-            patch("employeurd_megagest.update_check._fetch_json") as fetch_json,
+            patch("codamnd.update_check._fetch_text_response", side_effect=TimeoutError("slow")),
+            patch("codamnd.update_check._fetch_json") as fetch_json,
         ):
             result = check_for_update(DEFAULT_UPDATE_URL, current_version="0.1.0")
 
@@ -705,23 +726,23 @@ class EmployeurDMegaGestTest(unittest.TestCase):
 
     def test_update_check_sha256_timeout_keeps_release_result(self) -> None:
         with (
-            patch("employeurd_megagest.update_check._fetch_json") as fetch_json,
-            patch("employeurd_megagest.update_check._fetch_text", side_effect=TimeoutError("timed out")) as fetch_text,
+            patch("codamnd.update_check._fetch_json") as fetch_json,
+            patch("codamnd.update_check._fetch_text", side_effect=TimeoutError("timed out")) as fetch_text,
         ):
             fetch_json.return_value = {
                 "tag_name": "v0.1.0",
                 "html_url": "https://example.invalid/releases/v0.1.0",
                 "assets": [
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.0-portable.zip",
+                        "name": "CodaMND-v0.1.0-portable.zip",
                         "browser_download_url": "https://example.invalid/app.zip",
                     },
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.0-portable.zip.sha256",
+                        "name": "CodaMND-v0.1.0-portable.zip.sha256",
                         "browser_download_url": "https://example.invalid/app.zip.sha256",
                     },
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.0-portable.exe.sha256",
+                        "name": "CodaMND-v0.1.0-portable.exe.sha256",
                         "browser_download_url": "https://example.invalid/app.exe.sha256",
                     },
                 ],
@@ -745,7 +766,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         local = IntegrityCheckResult(
             status="local",
             current_version="0.1.0",
-            executable_path=Path("EmployeurD-MegaGest.exe"),
+            executable_path=Path("CodaMND.exe"),
             local_sha256=expected_hash,
             expected_sha256=None,
             signature_status="NotSigned",
@@ -753,20 +774,20 @@ class EmployeurDMegaGestTest(unittest.TestCase):
             message="local",
         )
         with (
-            patch("employeurd_megagest.integrity.local_integrity_details", return_value=local),
-            patch("employeurd_megagest.integrity._fetch_json") as fetch_json,
-            patch("employeurd_megagest.integrity._fetch_text") as fetch_text,
+            patch("codamnd.integrity.local_integrity_details", return_value=local),
+            patch("codamnd.integrity._fetch_json") as fetch_json,
+            patch("codamnd.integrity._fetch_text") as fetch_text,
         ):
             fetch_json.return_value = {
                 "tag_name": "v0.1.0",
                 "assets": [
                     {
-                        "name": "EmployeurD-MegaGest-v0.1.0.package.sha256",
+                        "name": "CodaMND-v0.1.0.package.sha256",
                         "browser_download_url": "https://example.invalid/app.package.sha256",
                     }
                 ],
             }
-            fetch_text.return_value = f"{expected_hash.upper()}  EmployeurD-MegaGest-v0.1.0-package"
+            fetch_text.return_value = f"{expected_hash.upper()}  CodaMND-v0.1.0-package"
 
             result = check_running_app_integrity(DEFAULT_UPDATE_URL, current_version="0.1.0", frozen=True)
 
@@ -777,15 +798,15 @@ class EmployeurDMegaGestTest(unittest.TestCase):
 
     def test_windows_signature_status_passes_path_as_powershell_argument(self) -> None:
         malicious_paths = (
-            Path(r"C:\Users\victim\bad'$(Write-Output PWNED)\EmployeurD-MegaGest.exe"),
-            Path("C:/Users/Public/ED'$(Start-Process calc)/EmployeurD-MegaGest.exe"),
+            Path(r"C:\Users\victim\bad'$(Write-Output PWNED)\CodaMND.exe"),
+            Path("C:/Users/Public/ED'$(Start-Process calc)/CodaMND.exe"),
         )
 
         for malicious_path in malicious_paths:
             with self.subTest(path=str(malicious_path)):
                 with (
-                    patch("employeurd_megagest.integrity.sys.platform", "win32"),
-                    patch("employeurd_megagest.integrity.subprocess.run") as run,
+                    patch("codamnd.integrity.sys.platform", "win32"),
+                    patch("codamnd.integrity.subprocess.run") as run,
                 ):
                     run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="Valid\n", stderr="")
 
@@ -802,7 +823,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
             root = Path(directory)
             (root / "lib").mkdir()
             (root / "lib" / "library.zip").write_text("version 1", encoding="utf-8")
-            (root / "EmployeurD-MegaGest.exe").write_text("launcher", encoding="utf-8")
+            (root / "CodaMND.exe").write_text("launcher", encoding="utf-8")
 
             first = app_package_sha256(root)
             (root / "lib" / "library.zip").write_text("version 2", encoding="utf-8")
@@ -1003,8 +1024,8 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertNotIn("WINDOWS_SIGNING_CERTIFICATE", workflow)
         self.assertNotIn("RequireSigned", publish_script)
         self.assertNotIn("SignWindowsExecutable", release_script)
-        self.assertIn('"dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.zip"', workflow)
-        self.assertNotIn('"dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.exe"', workflow)
+        self.assertIn('"dist/CodaMND-v$env:RELEASE_VERSION-portable.zip"', workflow)
+        self.assertNotIn('"dist/CodaMND-v$env:RELEASE_VERSION.exe"', workflow)
         self.assertIn("Assert-NoExistingReleaseTarget", publish_script)
         self.assertIn("gh release view $Tag", publish_script)
         self.assertIn('git ls-remote --tags origin "refs/tags/$Tag"', publish_script)
@@ -1012,7 +1033,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         self.assertIn('$Branch -ne "main"', publish_script)
         self.assertIn("refs/remotes/origin/main", publish_script)
         self.assertIn("Aucun ZIP portable disponible pour cette version.", site_js)
-        self.assertIn("EmployeurD-MegaGest-v", site_js)
+        self.assertIn("CodaMND|EmployeurD-MegaGest", site_js)
         self.assertIn("-portable\\.zip", site_js)
         self.assertIn("data-primary-download", site_html)
         self.assertNotIn("data-release-download", site_html)
@@ -1036,10 +1057,10 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         sponsor_url = "https://github.com/sponsors/MathieuLF"
         funding = (root / ".github" / "FUNDING.yml").read_text(encoding="utf-8")
-        app_gui = (root / "src" / "employeurd_megagest" / "app_gui.py").read_text(encoding="utf-8")
-        gui_dialogs = (root / "src" / "employeurd_megagest" / "gui_dialogs.py").read_text(encoding="utf-8")
-        gui_texts = (root / "src" / "employeurd_megagest" / "gui_texts.py").read_text(encoding="utf-8")
-        gui_theme = (root / "src" / "employeurd_megagest" / "gui_theme.py").read_text(encoding="utf-8")
+        app_gui = (root / "src" / "codamnd" / "app_gui.py").read_text(encoding="utf-8")
+        gui_dialogs = (root / "src" / "codamnd" / "gui_dialogs.py").read_text(encoding="utf-8")
+        gui_texts = (root / "src" / "codamnd" / "gui_texts.py").read_text(encoding="utf-8")
+        gui_theme = (root / "src" / "codamnd" / "gui_theme.py").read_text(encoding="utf-8")
         readme = (root / "README.md").read_text(encoding="utf-8")
         site_html = (root / "docs" / "index.html").read_text(encoding="utf-8")
         site_css = (root / "docs" / "assets" / "site.css").read_text(encoding="utf-8")
@@ -1117,18 +1138,18 @@ class EmployeurDMegaGestTest(unittest.TestCase):
             (root / "docs" / "assets").mkdir(parents=True)
             (root / "packaging" / "windows").mkdir(parents=True)
             (root / "scripts").mkdir()
-            (root / "src" / "employeurd_megagest" / "assets").mkdir(parents=True)
+            (root / "src" / "codamnd" / "assets").mkdir(parents=True)
 
             (root / "pyproject.toml").write_text(
                 '[project]\nname = "test"\n\n[project.optional-dependencies]\nbuild = ["cx_Freeze>=8"]\n',
                 encoding="utf-8",
             )
             (root / "scripts" / "build_exe.ps1").write_text(
-                "python -m cx_Freeze --icon packaging/windows/EmployeurD-MegaGest.ico\n",
+                "python -m cx_Freeze --icon packaging/windows/CodaMND.ico\n",
                 encoding="utf-8",
             )
-            (root / "packaging" / "windows" / "EmployeurD-MegaGest.ico").write_bytes(b"ico")
-            (root / "src" / "employeurd_megagest" / "assets" / "app-icon.png").write_bytes(b"png")
+            (root / "packaging" / "windows" / "CodaMND.ico").write_bytes(b"ico")
+            (root / "src" / "codamnd" / "assets" / "app-icon.png").write_bytes(b"png")
             (root / "docs" / "assets" / "product-icon.png").write_bytes(b"png")
             (root / ".github" / "workflows" / "release.yml").write_text(
                 "\n".join(
@@ -1142,9 +1163,9 @@ class EmployeurDMegaGestTest(unittest.TestCase):
                         "      generate_release_manifest.py",
                         "      .release-manifest.json",
                         "      append_release_verification.py",
-                        '      "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.zip"',
+                        '      "dist/CodaMND-v$env:RELEASE_VERSION-portable.zip"',
                         "      -portable.exe.sha256",
-                        '      "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.exe"',
+                        '      "dist/CodaMND-v$env:RELEASE_VERSION.exe"',
                     ]
                 ),
                 encoding="utf-8",
@@ -1176,7 +1197,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
     def test_virustotal_script_writes_local_report_without_api_key(self) -> None:
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / "EmployeurD-MegaGest.exe"
+            executable = Path(directory) / "CodaMND.exe"
             executable.write_bytes(b"synthetic executable")
             report = Path(directory) / "virustotal.md"
             env = dict(os.environ)
@@ -1216,7 +1237,7 @@ class EmployeurDMegaGestTest(unittest.TestCase):
 
     def test_virustotal_conflict_reads_existing_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            executable = Path(directory) / "EmployeurD-MegaGest.exe"
+            executable = Path(directory) / "CodaMND.exe"
             executable.write_bytes(b"synthetic executable")
             report = Path(directory) / "virustotal.md"
             argv = [
@@ -1252,28 +1273,28 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
             dist = workdir / "dist"
-            app = dist / "EmployeurD-MegaGest"
+            app = dist / "CodaMND"
             app.mkdir(parents=True)
-            executable = app / "EmployeurD-MegaGest.exe"
-            portable = dist / "EmployeurD-MegaGest-v9.9.9-portable.zip"
+            executable = app / "CodaMND.exe"
+            portable = dist / "CodaMND-v9.9.9-portable.zip"
             executable.write_bytes(b"synthetic executable")
             portable.write_bytes(b"synthetic portable zip")
             exe_sha = generate_release_manifest.sha256_file(executable)
             zip_sha = generate_release_manifest.sha256_file(portable)
-            (dist / "EmployeurD-MegaGest-v9.9.9-portable.exe.sha256").write_text(
-                f"{exe_sha}  EmployeurD-MegaGest.exe\n",
+            (dist / "CodaMND-v9.9.9-portable.exe.sha256").write_text(
+                f"{exe_sha}  CodaMND.exe\n",
                 encoding="ascii",
             )
-            (dist / "EmployeurD-MegaGest-v9.9.9-portable.zip.sha256").write_text(
-                f"{zip_sha}  EmployeurD-MegaGest-v9.9.9-portable.zip\n",
+            (dist / "CodaMND-v9.9.9-portable.zip.sha256").write_text(
+                f"{zip_sha}  CodaMND-v9.9.9-portable.zip\n",
                 encoding="ascii",
             )
             package_sha = "a" * 64
-            (dist / "EmployeurD-MegaGest-v9.9.9.package.sha256").write_text(
-                f"{package_sha}  EmployeurD-MegaGest-v9.9.9-package\n",
+            (dist / "CodaMND-v9.9.9.package.sha256").write_text(
+                f"{package_sha}  CodaMND-v9.9.9-package\n",
                 encoding="ascii",
             )
-            (dist / "EmployeurD-MegaGest-v9.9.9.virustotal.md").write_text(
+            (dist / "CodaMND-v9.9.9.virustotal.md").write_text(
                 "\n".join(
                     [
                         "# Rapport VirusTotal",
@@ -1301,14 +1322,14 @@ class EmployeurDMegaGestTest(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            manifest = json.loads((dist / "EmployeurD-MegaGest-v9.9.9.release-manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads((dist / "CodaMND-v9.9.9.release-manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(manifest["artifacts"][0]["sha256"], zip_sha)
         self.assertEqual(manifest["artifacts"][1]["sha256"], exe_sha)
         self.assertEqual(manifest["package_sha256"], package_sha)
         self.assertIn(
-            {"name": "EmployeurD-MegaGest-v9.9.9.package.sha256", "type": "package_sha256", "sha256": package_sha},
+            {"name": "CodaMND-v9.9.9.package.sha256", "type": "package_sha256", "sha256": package_sha},
             manifest["artifacts"],
         )
         self.assertFalse(manifest["privacy"]["payroll_files_submitted"])
@@ -1318,18 +1339,18 @@ class EmployeurDMegaGestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
             dist = workdir / "dist"
-            app = dist / "EmployeurD-MegaGest"
+            app = dist / "CodaMND"
             app.mkdir(parents=True)
-            executable = app / "EmployeurD-MegaGest.exe"
-            portable = dist / "EmployeurD-MegaGest-v9.9.9-portable.zip"
+            executable = app / "CodaMND.exe"
+            portable = dist / "CodaMND-v9.9.9-portable.zip"
             executable.write_bytes(b"synthetic executable")
             portable.write_bytes(b"synthetic portable zip")
             exe_sha = generate_release_manifest.sha256_file(executable)
             zip_sha = generate_release_manifest.sha256_file(portable)
-            (dist / "EmployeurD-MegaGest-v9.9.9-portable.exe.sha256").write_text(f"{exe_sha}\n", encoding="ascii")
-            (dist / "EmployeurD-MegaGest-v9.9.9-portable.zip.sha256").write_text(f"{zip_sha}\n", encoding="ascii")
-            (dist / "EmployeurD-MegaGest-v9.9.9.package.sha256").write_text(f"{'a' * 64}\n", encoding="ascii")
-            (dist / "EmployeurD-MegaGest-v9.9.9.virustotal.md").write_text(
+            (dist / "CodaMND-v9.9.9-portable.exe.sha256").write_text(f"{exe_sha}\n", encoding="ascii")
+            (dist / "CodaMND-v9.9.9-portable.zip.sha256").write_text(f"{zip_sha}\n", encoding="ascii")
+            (dist / "CodaMND-v9.9.9.package.sha256").write_text(f"{'a' * 64}\n", encoding="ascii")
+            (dist / "CodaMND-v9.9.9.virustotal.md").write_text(
                 "- malicious : 1\n- suspicious : 0\n",
                 encoding="utf-8",
             )
@@ -1381,11 +1402,11 @@ class EmployeurDMegaGestTest(unittest.TestCase):
                 "suspicious": 0,
                 "link": "https://www.virustotal.com/gui/file/example",
             },
-            "EmployeurD-MegaGest-v9.9.9.virustotal.md",
+            "CodaMND-v9.9.9.virustotal.md",
         )
 
         self.assertIn("Score VirusTotal: `0 malicious / 0 suspicious`", section)
-        self.assertIn("Rapport détaillé: `EmployeurD-MegaGest-v9.9.9.virustotal.md`", section)
+        self.assertIn("Rapport détaillé: `CodaMND-v9.9.9.virustotal.md`", section)
         self.assertIn("Paquet publié: `ZIP portable`", section)
         self.assertIn("SHA256 exécutable inclus: `exe-sha`", section)
         self.assertNotIn("SmartScreen", section)

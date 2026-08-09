@@ -8,7 +8,7 @@ mnd:
 updates:
   check_on_startup: false
   channel: "stable"
-  url: "https://api.github.com/repos/MathieuLF/employeurd-coda-megagest/releases/latest"
+  url: "https://api.github.com/repos/MathieuLF/codamnd/releases/latest"
 
 audit_log:
   enabled: true

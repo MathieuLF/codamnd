@@ -54,8 +54,8 @@ jobs:
             throw "Le secret VT_API_KEY est requis pour créer une mise en ligne."
           }
           python scripts/submit_virustotal.py `
-            --file "dist/EmployeurD-MegaGest/EmployeurD-MegaGest.exe" `
-            --output "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.virustotal.md" `
+            --file "dist/CodaMND/CodaMND.exe" `
+            --output "dist/CodaMND-v$env:RELEASE_VERSION.virustotal.md" `
             --wait-minutes 10 `
             --require-submit `
             --fail-on-detections
@@ -80,12 +80,12 @@ jobs:
         run: |
           gh release create $env:TAG_NAME `
             --draft `
-            --title "EmployeurD-MegaGest v$env:RELEASE_VERSION" `
-            --notes-file "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.release-notes.md" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.zip" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.zip.sha256" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.exe.sha256" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.package.sha256" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.sbom.json" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.virustotal.md" `
-            "dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION.release-manifest.json"
+            --title "CodaMND v$env:RELEASE_VERSION" `
+            --notes-file "dist/CodaMND-v$env:RELEASE_VERSION.release-notes.md" `
+            "dist/CodaMND-v$env:RELEASE_VERSION-portable.zip" `
+            "dist/CodaMND-v$env:RELEASE_VERSION-portable.zip.sha256" `
+            "dist/CodaMND-v$env:RELEASE_VERSION-portable.exe.sha256" `
+            "dist/CodaMND-v$env:RELEASE_VERSION.package.sha256" `
+            "dist/CodaMND-v$env:RELEASE_VERSION.sbom.json" `
+            "dist/CodaMND-v$env:RELEASE_VERSION.virustotal.md" `
+            "dist/CodaMND-v$env:RELEASE_VERSION.release-manifest.json"

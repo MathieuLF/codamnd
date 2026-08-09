@@ -23,7 +23,7 @@ def main() -> int:
     args = parser.parse_args()
 
     version = args.version.strip().lstrip("v")
-    name = "EmployeurD-MegaGest"
+    name = "CodaMND"
     dist = Path("dist")
     app_dir = dist / name
     exe = app_dir / f"{name}.exe"
@@ -169,13 +169,13 @@ def authenticode_status(path: Path) -> str:
                 "powershell",
                 "-NoProfile",
                 "-Command",
-                "$path = $env:EMPLOYEURD_SIGNATURE_PATH; Import-Module Microsoft.PowerShell.Security; (Get-AuthenticodeSignature -LiteralPath $path).Status",
+                "$path = $env:CODAMND_SIGNATURE_PATH; Import-Module Microsoft.PowerShell.Security; (Get-AuthenticodeSignature -LiteralPath $path).Status",
             ],
             capture_output=True,
             text=True,
             check=False,
             timeout=10,
-            env={**os.environ, "EMPLOYEURD_SIGNATURE_PATH": str(path.resolve())},
+            env={**os.environ, "CODAMND_SIGNATURE_PATH": str(path.resolve())},
         )
     except FileNotFoundError:
         return pe_status or "Non vérifiée"

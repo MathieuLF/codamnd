@@ -15,12 +15,12 @@ def main() -> int:
     args = parser.parse_args()
 
     sys.path.insert(0, str(Path("src").resolve()))
-    from employeurd_megagest.version import __version__
+    from codamnd.version import __version__
 
     if args.version and args.version != __version__:
         raise SystemExit(f"La version de mise en ligne {args.version} ne correspond pas à la version de l'application {__version__}.")
 
-    output = Path("dist") / f"EmployeurD-MegaGest-v{__version__}.sbom.json"
+    output = Path("dist") / f"CodaMND-v{__version__}.sbom.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     components = [
         {
@@ -45,7 +45,7 @@ def main() -> int:
             "tools": [{"vendor": "local", "name": "scripts/generate_sbom.py"}],
             "component": {
                 "type": "application",
-                "name": "EmployeurD-MegaGest",
+                "name": "CodaMND",
                 "version": __version__,
             },
         },

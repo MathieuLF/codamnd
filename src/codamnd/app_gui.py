@@ -431,10 +431,10 @@ class ScrollableFrame(ttk.Frame):
         self.canvas.yview_scroll(delta, "units")
 
 
-class EmployeurDMegaGestApp(tk.Tk):
+class CodaMNDApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title(f"EmployeurD-MegaGest {__version__}")
+        self.title(f"CodaMND {__version__}")
         self._set_initial_geometry()
         self._set_product_icon()
 
@@ -1556,7 +1556,7 @@ def _set_text(widget: tk.Text, value: str) -> None:
 
 
 def main() -> int:
-    app = EmployeurDMegaGestApp()
+    app = CodaMNDApp()
     app.mainloop()
     return 0
 

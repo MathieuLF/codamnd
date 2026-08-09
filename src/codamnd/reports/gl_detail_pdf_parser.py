@@ -8,8 +8,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
-from employeurd_megagest.errors import ErrorDetail, FileOperationError, ValidationFailed
-from employeurd_megagest.models import PayrollReportTotals
+from codamnd.errors import ErrorDetail, FileOperationError, ValidationFailed
+from codamnd.models import PayrollReportTotals
 
 
 Side = Literal["debit", "credit"]
