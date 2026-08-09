@@ -11,7 +11,9 @@ from typing import Any
 from .version import APP_NAME, __version__
 
 
-DEFAULT_UPDATE_URL = "https://api.github.com/repos/MathieuLF/employeurd-coda-megagest/releases/latest"
+DEFAULT_UPDATE_URL = "https://api.github.com/repos/MathieuLF/codamnd/releases/latest"
+LEGACY_APP_NAME = "EmployeurD-MegaGest"
+LEGACY_RELEASE_MAX_VERSION = (0, 1, 4)
 SHA256_RE = re.compile(r"\b[a-fA-F0-9]{64}\b")
 GITHUB_API_RELEASE_RE = re.compile(r"^https://api\.github\.com/repos/([^/]+)/([^/]+)/releases(?:/latest|/tags/[^/?#]+)?")
 GITHUB_WEB_RELEASE_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/releases")
@@ -148,7 +150,8 @@ def _fetch_github_release_page_payload(url: str, *, timeout: float) -> dict[str,
         return None
     release_url = f"https://github.com/{owner}/{name}/releases/tag/v{version}"
     download_root = f"https://github.com/{owner}/{name}/releases/download/v{version}"
-    package_name = f"{APP_NAME}-v{version}-portable.zip"
+    release_name = LEGACY_APP_NAME if _version_tuple(version) <= LEGACY_RELEASE_MAX_VERSION else APP_NAME
+    package_name = f"{release_name}-v{version}-portable.zip"
     return {
         "tag_name": f"v{version}",
         "html_url": release_url,
@@ -162,8 +165,8 @@ def _fetch_github_release_page_payload(url: str, *, timeout: float) -> dict[str,
                 "browser_download_url": f"{download_root}/{package_name}.sha256",
             },
             {
-                "name": f"{APP_NAME}-v{version}-portable.exe.sha256",
-                "browser_download_url": f"{download_root}/{APP_NAME}-v{version}-portable.exe.sha256",
+                "name": f"{release_name}-v{version}-portable.exe.sha256",
+                "browser_download_url": f"{download_root}/{release_name}-v{version}-portable.exe.sha256",
             },
         ],
     }
@@ -255,7 +258,9 @@ def release_asset(payload: dict[str, Any], suffix: str, *, version: str | None =
         score = 0
         if normalized_version and normalized_version in lowered_name:
             score += 2
-        if "employeurd-megagest" in lowered_name:
+        if "codamnd" in lowered_name:
+            score += 2
+        elif "employeurd-megagest" in lowered_name:
             score += 1
         candidates.append((score, item))
     if not candidates:

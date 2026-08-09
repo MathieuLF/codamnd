@@ -1,5 +1,5 @@
 param(
-    [string]$Name = "EmployeurD-MegaGest",
+    [string]$Name = "CodaMND",
     [string]$Version = "0.1.0",
     [string]$Python = ""
 )
@@ -16,8 +16,8 @@ if (-not $PythonExe) {
     }
 }
 
-$Manifest = (Resolve-Path -LiteralPath "packaging/windows/EmployeurD-MegaGest.manifest").Path
-$Icon = (Resolve-Path -LiteralPath "packaging/windows/EmployeurD-MegaGest.ico").Path
+$Manifest = (Resolve-Path -LiteralPath "packaging/windows/CodaMND.manifest").Path
+$Icon = (Resolve-Path -LiteralPath "packaging/windows/CodaMND.ico").Path
 $TargetDir = "dist/$Name"
 $PortableZip = "dist/$Name-v$Version-portable.zip"
 
@@ -27,7 +27,7 @@ Remove-Item -LiteralPath "dist/$Name.exe" -Force -ErrorAction SilentlyContinue
 Get-ChildItem -LiteralPath "dist" -Filter "$Name-v$Version*" -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
 & $PythonExe -m cx_Freeze `
-    --script "src/employeurd_megagest/gui_entry.py" `
+    --script "src/codamnd/gui_entry.py" `
     --base gui `
     --target-name $Name `
     --target-dir $TargetDir `

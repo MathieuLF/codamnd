@@ -1,5 +1,5 @@
 [project]
-name = "employeurd-to-megagest-mnd"
+name = "codamnd"
 version = "0.1.4"
 description = "Outil Windows local pour créer un fichier MND pour MégaGest à partir d'une écriture détaillée EmployeurD (TXT), avec contrôle des soldes et rapports de validation."
 requires-python = ">=3.12"
@@ -14,8 +14,8 @@ requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-employeurd-megagest = "employeurd_megagest.cli:main"
-employeurd-megagest-gui = "employeurd_megagest.app_gui:main"
+codamnd = "codamnd.cli:main"
+codamnd-gui = "codamnd.app_gui:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -25,4 +25,4 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-employeurd_megagest = ["assets/*.png"]
+codamnd = ["assets/*.png"]
