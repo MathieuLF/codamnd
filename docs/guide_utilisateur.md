@@ -2,7 +2,7 @@
 
 1. Téléchargez la dernière version depuis GitHub.
 2. Extrayez le fichier zip.
-3. Ouvrez `EmployeurD-MegaGest.exe`.
+3. Ouvrez l'application incluse dans le ZIP.
 4. Ajoutez l'écriture détaillée EmployeurD au format TXT.
 5. Ajoutez le PDF original du grand détail GL au besoin. Il doit venir d'EmployeurD, sans numérisation ni modification.
 6. Cliquez sur `Vérifier la paie`.

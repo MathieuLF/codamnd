@@ -21,13 +21,13 @@ def preferences_dir() -> Path:
     if sys.platform.startswith("win"):
         root = os.environ.get("LOCALAPPDATA")
         if root:
-            return Path(root) / "EmployeurD-MegaGest"
+            return Path(root) / "CodaMND"
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "EmployeurD-MegaGest"
+        return Path.home() / "Library" / "Application Support" / "CodaMND"
     root = os.environ.get("XDG_CONFIG_HOME")
     if root:
-        return Path(root) / "employeurd-megagest"
-    return Path.home() / ".config" / "employeurd-megagest"
+        return Path(root) / "codamnd"
+    return Path.home() / ".config" / "codamnd"
 
 
 def preferences_path() -> Path:

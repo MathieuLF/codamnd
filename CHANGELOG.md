@@ -4,6 +4,10 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+- Renomme le projet, le logiciel et le microsite en CodaMND.
+- Prépare les prochains paquets `CodaMND` tout en gardant les versions déjà publiées téléchargeables.
+- Remplace les liens du dépôt et du site par leurs nouvelles adresses officielles.
+
 ## [0.1.4] - 2026-07-09
 
 - Remplace le contrôle par rapport de paie brut par le PDF original du grand détail GL, cohérent avec les écritures au net.

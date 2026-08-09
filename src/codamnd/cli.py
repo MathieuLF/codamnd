@@ -27,7 +27,7 @@ EXIT_IO = 3
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="employeurd-megagest",
+        prog="codamnd",
         description="Convertit un fichier TXT EmployeurD en fichier MND MégaGest.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

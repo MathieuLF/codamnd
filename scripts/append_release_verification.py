@@ -20,7 +20,7 @@ def main() -> int:
     args = parser.parse_args()
 
     version = args.version.strip().lstrip("v")
-    name = "EmployeurD-MegaGest"
+    name = "CodaMND"
     notes_path = args.notes or Path("dist") / f"{name}-v{version}.release-notes.md"
     manifest_path = args.manifest or Path("dist") / f"{name}-v{version}.release-manifest.json"
     virustotal_path = args.virustotal_report or Path("dist") / f"{name}-v{version}.virustotal.md"

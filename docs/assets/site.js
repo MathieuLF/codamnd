@@ -1,5 +1,5 @@
 (() => {
-  const repo = "MathieuLF/employeurd-coda-megagest";
+  const repo = "MathieuLF/codamnd";
   const apiUrl = `https://api.github.com/repos/${repo}/releases?per_page=20`;
   const releasesUrl = `https://github.com/${repo}/releases`;
   const card = document.querySelector("[data-release-card]");
@@ -59,8 +59,9 @@
       return pattern.test(name) && (!rejectPattern || !rejectPattern.test(name));
     });
 
+  // Les versions déjà publiées gardent leur ancien nom jusqu'au prochain exécutable.
   const findPackage = (assets) =>
-    findAsset(assets, /^EmployeurD-MegaGest-v[^/\\]+-portable\.zip$/i);
+    findAsset(assets, /^(?:CodaMND|EmployeurD-MegaGest)-v[^/\\]+-portable\.zip$/i);
 
   const findSha = (assets, packageName) => {
     if (packageName) {

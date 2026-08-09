@@ -119,7 +119,7 @@ def main() -> int:
 
 def _version_issues(root: Path, version: str) -> list[str]:
     issues: list[str] = []
-    version_file = root / "src" / "employeurd_megagest" / "version.py"
+    version_file = root / "src" / "codamnd" / "version.py"
     version_text = version_file.read_text(encoding="utf-8")
     if f'__version__ = "{version}"' not in version_text:
         issues.append(f"{version_file.relative_to(root)} ne déclare pas __version__ = \"{version}\".")
@@ -160,11 +160,11 @@ def _release_policy_issues(root: Path) -> list[str]:
         issues.append("scripts/build_exe.ps1 doit utiliser cx_Freeze.")
     if "pyinstaller" in build_script.lower():
         issues.append("scripts/build_exe.ps1 ne doit pas utiliser l'ancien packager pour la mise en ligne officielle.")
-    if "--icon" not in build_script or "EmployeurD-MegaGest.ico" not in build_script:
+    if "--icon" not in build_script or "CodaMND.ico" not in build_script:
         issues.append("scripts/build_exe.ps1 doit intégrer l'icône produit Windows.")
     for asset in (
-        root / "packaging" / "windows" / "EmployeurD-MegaGest.ico",
-        root / "src" / "employeurd_megagest" / "assets" / "app-icon.png",
+        root / "packaging" / "windows" / "CodaMND.ico",
+        root / "src" / "codamnd" / "assets" / "app-icon.png",
         root / "docs" / "assets" / "product-icon.png",
     ):
         if not asset.exists():
@@ -175,7 +175,7 @@ def _release_policy_issues(root: Path) -> list[str]:
         issues.append(".github/workflows/release.yml ne doit pas créer de brouillon automatiquement sur push de tag.")
     if "--fail-on-detections" not in release_workflow:
         issues.append(".github/workflows/release.yml doit bloquer les détections VirusTotal.")
-    if '"dist/EmployeurD-MegaGest-v$env:RELEASE_VERSION-portable.zip"' not in release_workflow:
+    if '"dist/CodaMND-v$env:RELEASE_VERSION-portable.zip"' not in release_workflow:
         issues.append(".github/workflows/release.yml doit publier le ZIP portable comme asset principal.")
     if "-portable.exe.sha256" not in release_workflow:
         issues.append(".github/workflows/release.yml doit publier l'empreinte de l'exécutable contenu dans le ZIP.")
@@ -185,7 +185,7 @@ def _release_policy_issues(root: Path) -> list[str]:
         issues.append(".github/workflows/release.yml doit générer et publier le manifeste de mise en ligne.")
     if "append_release_verification.py" not in release_workflow:
         issues.append(".github/workflows/release.yml doit afficher le score VirusTotal dans les notes de mise en ligne.")
-    if re.search(r"(?m)^\s*\"dist/EmployeurD-MegaGest-v\$env:RELEASE_VERSION\.exe\"\s*`?$", release_workflow):
+    if re.search(r"(?m)^\s*\"dist/CodaMND-v\$env:RELEASE_VERSION\.exe\"\s*`?$", release_workflow):
         issues.append(".github/workflows/release.yml ne doit pas publier de .exe direct sans certificat.")
 
     publish_script = (root / "scripts" / "publish_release.ps1").read_text(encoding="utf-8")

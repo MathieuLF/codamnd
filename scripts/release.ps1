@@ -26,28 +26,28 @@ if ($LASTEXITCODE -ne 0) {
 
 .\scripts\build_exe.ps1 -Version $Version
 
-$PackageHash = python -c "import sys; sys.path.insert(0, 'src'); from pathlib import Path; from employeurd_megagest.integrity import app_package_sha256; print(app_package_sha256(Path('dist/EmployeurD-MegaGest')) or '')"
+$PackageHash = python -c "import sys; sys.path.insert(0, 'src'); from pathlib import Path; from codamnd.integrity import app_package_sha256; print(app_package_sha256(Path('dist/CodaMND')) or '')"
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($PackageHash)) {
     throw "La génération de l'empreinte du paquet a échoué avec le code $LASTEXITCODE"
 }
 $PackageHash = $PackageHash.Trim()
-$PackageHash + "  EmployeurD-MegaGest-v$Version-package" | Set-Content -Encoding ascii "dist/EmployeurD-MegaGest-v$Version.package.sha256"
+$PackageHash + "  CodaMND-v$Version-package" | Set-Content -Encoding ascii "dist/CodaMND-v$Version.package.sha256"
 
 python scripts/generate_sbom.py --version $Version
 if ($LASTEXITCODE -ne 0) {
     throw "La génération du SBOM a échoué avec le code $LASTEXITCODE"
 }
 
-python scripts/extract_changelog.py --version $Version --output "dist/EmployeurD-MegaGest-v$Version.release-notes.md"
+python scripts/extract_changelog.py --version $Version --output "dist/CodaMND-v$Version.release-notes.md"
 if ($LASTEXITCODE -ne 0) {
     throw "L'extraction du journal des changements a échoué avec le code $LASTEXITCODE"
 }
 
-$PortableExe = "dist/EmployeurD-MegaGest/EmployeurD-MegaGest.exe"
+$PortableExe = "dist/CodaMND/CodaMND.exe"
 
-$VirusTotal = "dist/EmployeurD-MegaGest-v$Version.virustotal.md"
+$VirusTotal = "dist/CodaMND-v$Version.virustotal.md"
 @"
-# Rapport VirusTotal EmployeurD-MegaGest v$Version
+# Rapport VirusTotal CodaMND v$Version
 
 Rapport à produire après l'analyse de l'exécutable public seulement.
 Ne jamais soumettre de TXT EmployeurD, rapport de contrôle, MND, Markdown ou JSON de validation.

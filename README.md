@@ -1,4 +1,4 @@
-# EmployeurD-MegaGest
+# CodaMND
 
 <p align="center">
   <strong>Créer un fichier MND pour MégaGest à partir d'une écriture détaillée EmployeurD.</strong>
@@ -12,15 +12,15 @@
 
 ## En bref
 
-EmployeurD-MegaGest est un utilitaire Windows qui prépare un fichier `.mnd` pour MégaGest à partir d'une écriture détaillée EmployeurD au format TXT.
+CodaMND est un utilitaire Windows qui prépare un fichier `.mnd` pour MégaGest à partir d'une écriture détaillée EmployeurD au format TXT.
 
 Le rapport recommandé est le PDF original du grand détail de l'écriture GL. Il confirme les totaux et les montants par compte avant la création du MND. Il doit venir d'EmployeurD, sans numérisation ni modification.
 
 ## Utiliser l'application
 
-1. Télécharger la dernière version depuis [GitHub Releases](https://github.com/MathieuLF/employeurd-coda-megagest/releases).
+1. Télécharger la dernière version depuis [GitHub Releases](https://github.com/MathieuLF/codamnd/releases).
 2. Extraire le fichier zip.
-3. Ouvrir `EmployeurD-MegaGest.exe`.
+3. Ouvrir l'application incluse dans le ZIP.
 4. Ajouter l'écriture EmployeurD TXT.
 5. Ajouter le PDF original du grand détail GL au besoin.
 6. Vérifier la paie, puis créer le MND si tout est conforme.
@@ -33,7 +33,7 @@ Si le fichier provient bien de la page officielle GitHub Releases, cliquez sur `
 
 ## Pages utiles
 
-- [Site de présentation](https://mathieulf.github.io/employeurd-coda-megagest/)
+- [Site de présentation](https://codamnd.nethercore.dev/)
 - [Guide rapide](docs/guide_utilisateur.md)
 - [Formats des fichiers](docs/formats.md)
 - [Sécurité](SECURITY.md)

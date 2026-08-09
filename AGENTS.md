@@ -23,7 +23,7 @@ python scripts/agent_validate.py
 ## Règles de contribution
 
 - Garder les textes utilisateurs courts, naturels et en français.
-- Le canal public principal est le ZIP portable `EmployeurD-MegaGest-v*-portable.zip`.
+- Le canal public principal est le ZIP portable `CodaMND-v*-portable.zip`.
 - Ne pas publier de release, créer de tag, pousser sur `main` ou soumettre à VirusTotal sans demande explicite.
 - Utiliser des noms de branche qui décrivent le changement.
 - Pour une revue de code, prioriser les bogues, régressions, risques de publication et tests manquants.

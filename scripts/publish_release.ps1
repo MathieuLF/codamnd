@@ -90,7 +90,7 @@ if ($CreateGitHubRelease) {
 
 .\scripts\release.ps1 -Version $ReleaseVersion -AllowDirty
 
-$Name = "EmployeurD-MegaGest"
+$Name = "CodaMND"
 $PortableExe = "dist/$Name/$Name.exe"
 $PortableZip = "dist/$Name-v$ReleaseVersion-portable.zip"
 $VirusTotalReport = "dist/$Name-v$ReleaseVersion.virustotal.md"
@@ -143,12 +143,12 @@ if ($SubmitVirusTotal) {
 }
 
 if ($CommitVersion) {
-    $VersionCommitPaths = @("CHANGELOG.md", "pyproject.toml", "src/employeurd_megagest/version.py")
+    $VersionCommitPaths = @("CHANGELOG.md", "pyproject.toml", "src/codamnd/version.py")
     if (Test-Path $PublicVirusTotalReport) {
         $VersionCommitPaths += $PublicVirusTotalReport
     }
     git add @VersionCommitPaths
-    git commit -m "Préparer EmployeurD-MegaGest v$ReleaseVersion"
+    git commit -m "Préparer CodaMND v$ReleaseVersion"
     Assert-LastExitCode "Commit de version impossible"
 } else {
     if ($Push -or $CreateGitHubRelease) {
@@ -166,7 +166,7 @@ if ($RemainingStatus) {
 
 git rev-parse -q --verify "refs/tags/$Tag" *> $null
 if ($LASTEXITCODE -ne 0) {
-    git tag -a $Tag -m "EmployeurD-MegaGest v$ReleaseVersion"
+    git tag -a $Tag -m "CodaMND v$ReleaseVersion"
     Assert-LastExitCode "Création du tag impossible"
 }
 
@@ -188,7 +188,7 @@ if ($CreateGitHubRelease) {
     }
     $ReleaseArgs = @(
         "release", "create", $Tag,
-        "--title", "EmployeurD-MegaGest v$ReleaseVersion",
+        "--title", "CodaMND v$ReleaseVersion",
         "--notes-file", "dist/$Name-v$ReleaseVersion.release-notes.md",
         $PortableZip,
         "$PortableZip.sha256",

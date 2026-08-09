@@ -51,7 +51,7 @@ def main() -> int:
 
 
 def read_current_version(root: Path) -> str:
-    version_file = root / "src" / "employeurd_megagest" / "version.py"
+    version_file = root / "src" / "codamnd" / "version.py"
     match = VERSION_RE.search(version_file.read_text(encoding="utf-8"))
     if not match:
         raise SystemExit("Version introuvable dans version.py.")
@@ -71,7 +71,7 @@ def bump_version(version: str, bump: str) -> str:
 
 
 def write_version_files(root: Path, version: str) -> None:
-    version_file = root / "src" / "employeurd_megagest" / "version.py"
+    version_file = root / "src" / "codamnd" / "version.py"
     version_text = version_file.read_text(encoding="utf-8")
     version_file.write_text(VERSION_RE.sub(f'__version__ = "{version}"', version_text), encoding="utf-8")
 
@@ -140,7 +140,7 @@ def build_release_notes(root: Path, version: str, notes: str) -> str:
         stat = git_lines(root, "diff", "--stat")
 
     lines = [
-        f"# EmployeurD-MegaGest v{version}",
+        f"# CodaMND v{version}",
         "",
         "## Changements",
         "",

@@ -11,8 +11,8 @@ from typing import Any
 def default_log_dir() -> Path:
     root = os.environ.get("LOCALAPPDATA")
     if root:
-        return Path(root) / "EmployeurD-MegaGest" / "logs"
-    return Path.home() / ".employeurd-megagest" / "logs"
+        return Path(root) / "CodaMND" / "logs"
+    return Path.home() / ".codamnd" / "logs"
 
 
 def write_audit_event(event: str, *, status: str, details: dict[str, Any] | None = None, log_dir: Path | None = None) -> Path:

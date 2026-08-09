@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 
-APP_DISPLAY_NAME = "Conversion de paie vers MégaGest"
+APP_DISPLAY_NAME = "CodaMND"
 APP_SUBTITLE = "Ajoutez l'écriture de paie, confirmez les soldes au besoin, puis créez le fichier MND."
 COPYRIGHT_TEXT = "© 2026 Mathieu Lapointe-Fiset"
-WEBSITE_URL = "https://mathieu.pro"
-REPOSITORY_URL = "https://github.com/MathieuLF/employeurd-coda-megagest"
+WEBSITE_URL = "https://codamnd.nethercore.dev"
+REPOSITORY_URL = "https://github.com/MathieuLF/codamnd"
 SPONSOR_URL = "https://github.com/sponsors/MathieuLF"
 SUPPORT_EMAIL = "services@mathieu.pro"
-SUPPORT_ISSUE_URL = "https://github.com/MathieuLF/employeurd-coda-megagest/issues/new/choose"
-WEBSITE_LINK_TEXT = "Mathieu.PRO"
+SUPPORT_ISSUE_URL = "https://github.com/MathieuLF/codamnd/issues/new/choose"
+WEBSITE_LINK_TEXT = "Site CodaMND"
 REPOSITORY_LINK_TEXT = "Dépôt GitHub"
 SPONSOR_LINK_TEXT = "Sponsor GitHub"
 
