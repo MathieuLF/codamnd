@@ -16,6 +16,12 @@ CodaMND est un utilitaire Windows qui prépare un fichier `.mnd` pour MégaGest 
 
 Le rapport recommandé est le PDF original du grand détail de l'écriture GL. Il confirme les totaux et les montants par compte avant la création du MND. Il doit venir d'EmployeurD, sans numérisation ni modification.
 
+Le dépôt public contient le code de l'utilitaire et ses validations. Il ne décrit ni ne garantit aucun hébergement exploité par son auteur; les versions distribuées sont celles de GitHub Releases.
+
+## Cycle de vie
+
+CodaMND est un utilitaire local maintenu et versionné par GitHub Releases. Une publication GitHub atteste un artefact disponible, pas l'état d'un service hébergé.
+
 ## Utiliser l'application
 
 1. Télécharger la dernière version depuis [GitHub Releases](https://github.com/MathieuLF/codamnd/releases).
@@ -33,7 +39,6 @@ Si le fichier provient bien de la page officielle GitHub Releases, cliquez sur `
 
 ## Pages utiles
 
-- [Site de présentation](https://codamnd.nethercore.dev/)
 - [Guide rapide](docs/guide_utilisateur.md)
 - [Formats des fichiers](docs/formats.md)
 - [Sécurité](SECURITY.md)
@@ -56,3 +61,9 @@ La validation courante ne demande ni base de données, ni serveur, ni clé secr�
 Ne publiez jamais de fichier de paie réel dans GitHub, dans un billet public ou dans un service externe.
 
 EmployeurD, PG Solutions, MégaGest et les autres marques citées appartiennent à leurs propriétaires respectifs.
+
+Les fichiers traités restent locaux à l'application. Le dépôt, les demandes de soutien et les rapports de bogue ne doivent contenir ni données de paie, ni renseignements personnels, ni secrets.
+
+## Licence
+
+CodaMND est distribué sous licence MIT. Voir [LICENSE](LICENSE).
