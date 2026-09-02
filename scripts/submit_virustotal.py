@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -14,6 +15,8 @@ from typing import Any
 
 API_ROOT = "https://www.virustotal.com/api/v3"
 SMALL_FILE_LIMIT = 32 * 1024 * 1024
+RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503, 504}
+LOOKUP_ATTEMPTS = 3
 
 
 def main() -> int:
@@ -62,14 +65,16 @@ def main() -> int:
                 already_present = True
         file_report = get_file_report(api_key, sha256)
     except Exception as error:
+        error_message = f"{type(error).__name__}: {error}"
         write_report(
             args.output,
             file_path=file_path,
             sha256=sha256,
             submitted=not args.lookup_only,
             status="échec",
-            message=str(error),
+            message=error_message,
         )
+        print(f"VirusTotal: {error_message}", file=sys.stderr)
         return 1 if args.require_submit else 0
 
     attributes = analysis.get("data", {}).get("attributes", {}) if isinstance(analysis, dict) else {}
@@ -92,7 +97,12 @@ def main() -> int:
         detections=detections,
     )
     if args.fail_on_detections and detections:
+        print(f"VirusTotal: {len(detections)} détection(s) à examiner.", file=sys.stderr)
         return 4
+    print(
+        "VirusTotal: "
+        f"statut={status}; malicious={stats.get('malicious', 0)}; suspicious={stats.get('suspicious', 0)}"
+    )
     return 0
 
 
@@ -163,13 +173,25 @@ def poll_analysis(api_key: str, analysis_id: str, *, wait_minutes: int, poll_sec
 def get_file_report(api_key: str, sha256: str) -> dict[str, Any]:
     try:
         return vt_request(f"{API_ROOT}/files/{sha256}", api_key)
-    except urllib.error.HTTPError:
-        return {}
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return {}
+        raise
 
 
 def vt_request(url: str, api_key: str) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"Accept": "application/json", "x-apikey": api_key})
-    return open_json(request)
+    for attempt in range(LOOKUP_ATTEMPTS):
+        request = urllib.request.Request(url, headers={"Accept": "application/json", "x-apikey": api_key})
+        try:
+            return open_json(request)
+        except urllib.error.HTTPError as error:
+            if error.code not in RETRYABLE_HTTP_STATUSES or attempt == LOOKUP_ATTEMPTS - 1:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == LOOKUP_ATTEMPTS - 1:
+                raise
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError("VirusTotal n'a pas répondu après plusieurs tentatives.")
 
 
 def collect_detections(results: Any) -> list[dict[str, str]]:
