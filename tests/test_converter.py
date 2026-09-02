@@ -1056,6 +1056,8 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("timeout-minutes: 20", workflow)
         self.assertIn('$env:GITHUB_REF_NAME -ne "main"', workflow)
         self.assertIn("refs/remotes/origin/main", workflow)
+        self.assertIn("$virusTotalExitCode = $LASTEXITCODE", workflow)
+        self.assertIn("Get-Content -LiteralPath $virusTotalReport", workflow)
         self.assertNotIn("WINDOWS_SIGNING_CERTIFICATE", workflow)
         self.assertNotIn("RequireSigned", publish_script)
         self.assertNotIn("SignWindowsExecutable", release_script)
@@ -1317,6 +1319,24 @@ class CodaMNDTest(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertIn("Rapport VirusTotal existant consulté", report_text)
+
+    def test_virustotal_lookup_retries_transient_http_failure(self) -> None:
+        transient = urllib.error.HTTPError("https://example.invalid/report", 503, "Unavailable", {}, None)
+        with (
+            patch("scripts.submit_virustotal.open_json", side_effect=[transient, {"data": {"id": "ok"}}]) as open_json,
+            patch("scripts.submit_virustotal.time.sleep") as sleep,
+        ):
+            payload = submit_virustotal.vt_request("https://example.invalid/report", "synthetic-key")
+
+        self.assertEqual(payload, {"data": {"id": "ok"}})
+        self.assertEqual(open_json.call_count, 2)
+        sleep.assert_called_once_with(2)
+
+    def test_virustotal_file_report_only_ignores_not_found(self) -> None:
+        rate_limited = urllib.error.HTTPError("https://example.invalid/report", 429, "Rate limited", {}, None)
+        with patch("scripts.submit_virustotal.vt_request", side_effect=rate_limited):
+            with self.assertRaises(urllib.error.HTTPError):
+                submit_virustotal.get_file_report("synthetic-key", "a" * 64)
 
     def test_release_manifest_validates_hashes_and_clean_virustotal_report(self) -> None:
         root = Path(__file__).resolve().parents[1]

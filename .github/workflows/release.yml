@@ -75,12 +75,20 @@ jobs:
           if (-not $env:VT_API_KEY) {
             throw "Le secret VT_API_KEY est requis pour créer une mise en ligne."
           }
+          $virusTotalReport = "dist/CodaMND-v$env:RELEASE_VERSION.virustotal.md"
           python scripts/submit_virustotal.py `
             --file "dist/CodaMND/CodaMND.exe" `
-            --output "dist/CodaMND-v$env:RELEASE_VERSION.virustotal.md" `
+            --output $virusTotalReport `
             --wait-minutes 10 `
             --require-submit `
             --fail-on-detections
+          $virusTotalExitCode = $LASTEXITCODE
+          if (Test-Path -LiteralPath $virusTotalReport) {
+            Get-Content -LiteralPath $virusTotalReport
+          }
+          if ($virusTotalExitCode -ne 0) {
+            exit $virusTotalExitCode
+          }
 
       - name: Générer le manifeste de mise en ligne
         shell: pwsh
