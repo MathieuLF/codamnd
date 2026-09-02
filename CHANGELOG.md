@@ -14,7 +14,7 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 - Refuse les rapports GL au mauvais format et traite les chemins inaccessibles sans interrompre l'application.
 - Sécurise les écritures atomiques avec un fichier temporaire unique et un nettoyage garanti en cas d'échec.
 - Corrige le débordement mobile de la carte de version et ajoute un repli borné lorsque GitHub est lent, indisponible ou retourne une réponse invalide.
-- Actualise `pdfplumber`, `cx_Freeze`, `setuptools` et CodeQL, puis renforce le workflow de publication.
+- Actualise `pdfplumber`, `setuptools` et CodeQL, verrouille la chaîne Windows déjà vérifiée propre, puis renforce le workflow de publication.
 - Publie le premier paquet portable sous le nom CodaMND.
 ## [0.1.4] - 2026-07-09
 
