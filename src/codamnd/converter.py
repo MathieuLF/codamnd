@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import tempfile
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -288,13 +289,31 @@ def _assert_output_available(path: Path, *, overwrite: bool) -> None:
 def _write_text_atomic(path: Path, text: str, *, encoding: str, overwrite: bool) -> None:
     if path.exists() and not overwrite:
         raise FileOperationError(f"Le fichier existe déjà: {path}")
+    tmp_path: Path | None = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = path.with_name(f"{path.name}.tmp")
-        tmp_path.write_text(text, encoding=encoding, newline="")
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding=encoding,
+            newline="",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=path.parent,
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(tmp_path, path)
     except OSError as error:
         raise FileOperationError(f"Impossible d'écrire le fichier: {path}") from error
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _reconciliation_error_details(reconciliations: list[ReconciliationResult]) -> list[ErrorDetail]:

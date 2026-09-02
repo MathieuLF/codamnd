@@ -4,10 +4,18 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.0] - 2026-09-02
+
 - Renomme le projet, le logiciel et le microsite en CodaMND.
 - Prépare les prochains paquets `CodaMND` tout en gardant les versions déjà publiées téléchargeables.
 - Remplace les liens du dépôt et du site par leurs nouvelles adresses officielles.
-
+- Uniformise l'application Windows et le microsite avec une hiérarchie plus compacte, des dialogues lisibles et une navigation accessible.
+- Fige les fichiers et les options pendant chaque opération, puis ignore les résultats devenus périmés si la sélection a changé.
+- Refuse les rapports GL au mauvais format et traite les chemins inaccessibles sans interrompre l'application.
+- Sécurise les écritures atomiques avec un fichier temporaire unique et un nettoyage garanti en cas d'échec.
+- Corrige le débordement mobile de la carte de version et ajoute un repli borné lorsque GitHub est lent, indisponible ou retourne une réponse invalide.
+- Actualise `pdfplumber`, `cx_Freeze`, `setuptools` et CodeQL, puis renforce le workflow de publication.
+- Publie le premier paquet portable sous le nom CodaMND.
 ## [0.1.4] - 2026-07-09
 
 - Remplace le contrôle par rapport de paie brut par le PDF original du grand détail GL, cohérent avec les écritures au net.

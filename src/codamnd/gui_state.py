@@ -70,14 +70,16 @@ def build_file_preview(value: str, *, label: str, suffixes: tuple[str, ...], opt
         return FilePreview(None, status, detail, "warning" if not optional else "info", optional)
 
     path = Path(value)
-    if not path.exists():
-        return FilePreview(path, "Introuvable", f"{label}: le fichier n'existe pas.", "error", False)
-    if not path.is_file():
-        return FilePreview(path, "Invalide", f"{label}: le chemin sélectionné n'est pas un fichier.", "error", False)
-    if suffixes and path.suffix.lower() not in suffixes:
-        return FilePreview(path, "Format à vérifier", f"{path.name} - extension inattendue.", "warning", optional)
-
-    stat = path.stat()
+    try:
+        if not path.exists():
+            return FilePreview(path, "Introuvable", f"{label}: le fichier n'existe pas.", "error", False)
+        if not path.is_file():
+            return FilePreview(path, "Invalide", f"{label}: le chemin sélectionné n'est pas un fichier.", "error", False)
+        if suffixes and path.suffix.lower() not in suffixes:
+            return FilePreview(path, "Format invalide", f"{path.name} - extension inattendue.", "error", False)
+        stat = path.stat()
+    except (OSError, ValueError):
+        return FilePreview(path, "Inaccessible", f"{label}: impossible de lire ce chemin.", "error", False)
     detail = f"{path.name} - {_format_size(stat.st_size)} - modifié le {_format_datetime(stat.st_mtime)}"
     return FilePreview(path, "Prêt", detail, "success", True)
 
@@ -96,10 +98,12 @@ def build_output_preview(
 ) -> OutputPreview:
     using_default = not output_value.strip()
     output_dir = default_output_root() if using_default else Path(output_value)
-    if output_dir.exists() and not output_dir.is_dir():
-        return OutputPreview(output_dir, detail="Le chemin de sortie existe mais n'est pas un dossier.", ok=False)
-
-    writable = _directory_probably_writable(output_dir)
+    try:
+        if output_dir.exists() and not output_dir.is_dir():
+            return OutputPreview(output_dir, detail="Le chemin de sortie existe mais n'est pas un dossier.", ok=False)
+        writable = _directory_probably_writable(output_dir)
+    except (OSError, ValueError):
+        return OutputPreview(output_dir, detail="Le chemin de sortie n'est pas accessible.", ok=False)
     if not writable:
         return OutputPreview(output_dir, detail="Le dossier de sortie ne semble pas accessible en écriture.", ok=False)
 

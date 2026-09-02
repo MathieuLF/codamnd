@@ -9,6 +9,7 @@ from tkinter import ttk
 from .audit_log import default_log_dir
 from .gui_state import summary_text
 from .gui_texts import LEGAL_NOTICE_TEXT, SECURITY_NOTICE_TEXT, SPONSOR_LINK_TEXT, SPONSOR_URL, SUPPORT_EMAIL, SUPPORT_ISSUE_URL, Text
+from .gui_theme import Palette
 from .integrity import IntegrityCheckResult, check_running_app_integrity, local_integrity_details
 from .models import ConversionResult
 from .platform_actions import open_folder, open_path
@@ -102,26 +103,59 @@ def _dialog(parent: tk.Tk, title: str, geometry: str) -> tk.Toplevel:
     dialog.title(title)
     dialog.transient(parent)
     dialog.grab_set()
-    dialog.geometry(geometry)
+    width, height = (int(value) for value in geometry.lower().split("x", 1))
+    parent.update_idletasks()
+    x = max(0, parent.winfo_rootx() + (parent.winfo_width() - width) // 2)
+    y = max(0, parent.winfo_rooty() + (parent.winfo_height() - height) // 2)
+    dialog.geometry(f"{width}x{height}+{x}+{y}")
     dialog.minsize(520, 360)
-    dialog.configure(background="#f3f6fa")
+    dialog.configure(background=Palette.background)
     dialog.columnconfigure(0, weight=1)
     dialog.rowconfigure(0, weight=1)
+    dialog.bind("<Escape>", lambda _event: dialog.destroy())
     return dialog
 
 
 def _text_block(parent: tk.Widget, content: str) -> tk.Text:
-    text = tk.Text(parent, wrap="word", padx=16, pady=14, borderwidth=0, font=("Segoe UI", 10))
-    text.insert("1.0", content)
+    text = tk.Text(
+        parent,
+        wrap="word",
+        padx=18,
+        pady=16,
+        borderwidth=0,
+        highlightthickness=1,
+        highlightbackground=Palette.border,
+        background=Palette.surface,
+        foreground=Palette.text,
+        selectbackground=Palette.info_bg,
+        selectforeground=Palette.text,
+        font=("Segoe UI", 10),
+        spacing1=2,
+        spacing3=2,
+    )
+    text.tag_configure("heading", foreground=Palette.primary_dark, font=("Segoe UI Semibold", 12), spacing1=10, spacing3=6)
+    lines = content.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        is_heading = index + 1 < len(lines) and lines[index + 1] and set(lines[index + 1]) == {"="}
+        text.insert("end", f"{line}\n", ("heading",) if is_heading else ())
+        index += 2 if is_heading else 1
     text.configure(state="disabled")
     return text
 
 
 def _button_row(parent: tk.Toplevel, actions: list[tuple[str, object]], *, row: int = 1) -> None:
-    frame = ttk.Frame(parent)
+    frame = ttk.Frame(parent, style="App.TFrame")
     frame.grid(row=row, column=0, sticky="e", padx=16, pady=(0, 16))
     for index, (label, command) in enumerate(actions):
-        ttk.Button(frame, text=label, command=command).grid(row=0, column=index, padx=(8 if index else 0, 0))
+        if len(actions) > 1 and index == 0:
+            style = "Primary.TButton"
+        elif label == Text.close:
+            style = "Quiet.TButton"
+        else:
+            style = "Action.TButton"
+        ttk.Button(frame, text=label, command=command, style=style).grid(row=0, column=index, padx=(8 if index else 0, 0))
 
 
 def _copy(parent: tk.Tk, value: str) -> None:
@@ -176,7 +210,11 @@ def _load_security_details(dialog: tk.Toplevel, text: tk.Text) -> None:
     result_queue: queue.Queue[str] = queue.Queue()
 
     def worker() -> None:
-        result_queue.put(_format_integrity_result(local_integrity_details()))
+        try:
+            details = _format_integrity_result(local_integrity_details())
+        except Exception:
+            details = "Les informations locales ne sont pas disponibles pour le moment."
+        result_queue.put(details)
 
     def poll() -> None:
         try:
@@ -200,14 +238,18 @@ def _load_integrity_check(dialog: tk.Toplevel, text: tk.Text, update_url: str) -
             "Comparaison avec la version GitHub en cours...",
         ),
     )
-    result_queue: queue.Queue[IntegrityCheckResult] = queue.Queue()
+    result_queue: queue.Queue[str] = queue.Queue()
 
     def worker() -> None:
-        result_queue.put(check_running_app_integrity(update_url))
+        try:
+            details = _format_integrity_result(check_running_app_integrity(update_url))
+        except Exception:
+            details = "La comparaison avec la version officielle est indisponible pour le moment."
+        result_queue.put(details)
 
     def poll() -> None:
         try:
-            result = result_queue.get_nowait()
+            details = result_queue.get_nowait()
         except queue.Empty:
             if dialog.winfo_exists():
                 dialog.after(100, poll)
@@ -217,7 +259,7 @@ def _load_integrity_check(dialog: tk.Toplevel, text: tk.Text, update_url: str) -
                 text,
                 _security_intro_text().replace(
                     "Lecture locale en cours...",
-                    _format_integrity_result(result),
+                    details,
                 ),
             )
 

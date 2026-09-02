@@ -16,9 +16,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from codamnd.config import load_app_config
-from codamnd.converter import convert_file
+from codamnd.converter import _write_text_atomic, convert_file
 from codamnd.audit_log import write_audit_event
-from codamnd.errors import ValidationFailed
+from codamnd.errors import FileOperationError, ValidationFailed
 from codamnd.app_gui import (
     SECURITY_TOOLTIP_TEXT,
     _generated_outputs_message,
@@ -243,6 +243,16 @@ class CodaMNDTest(unittest.TestCase):
             self.assertIsNone(result.validation_json_path)
             self.assertFalse(output.with_suffix(".rapport.md").exists())
             self.assertFalse(output.with_suffix(".validation.json").exists())
+
+    def test_atomic_writer_cleans_staged_file_after_replace_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "sortie.mnd"
+            with patch("codamnd.converter.os.replace", side_effect=OSError("échec simulé")):
+                with self.assertRaises(FileOperationError):
+                    _write_text_atomic(output, "contenu", encoding="utf-8", overwrite=False)
+
+            self.assertFalse(output.exists())
+            self.assertEqual(list(Path(directory).glob(".sortie.mnd.*.tmp")), [])
 
     def test_gui_generation_message_matches_selected_outputs(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -895,6 +905,24 @@ class CodaMNDTest(unittest.TestCase):
         self.assertFalse(output_preview.ok)
         self.assertIn("pas un dossier", output_preview.detail)
 
+    def test_gui_state_rejects_selected_report_with_wrong_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "rapport.txt"
+            report.write_text("rapport synthétique", encoding="utf-8")
+            preview = build_file_preview(str(report), label="Rapport GL", suffixes=(".pdf",), optional=True)
+
+        self.assertFalse(preview.ok)
+        self.assertEqual(preview.title, "Format invalide")
+
+    def test_gui_background_work_freezes_inputs_and_rejects_stale_results(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        app_gui = (root / "src" / "codamnd" / "app_gui.py").read_text(encoding="utf-8")
+
+        self.assertIn("self._task_inputs = self._current_operation_inputs()", app_gui)
+        self.assertIn("inputs_changed = self._task_inputs is not None", app_gui)
+        self.assertIn("Résultat ignoré: les choix ont changé pendant l'opération.", app_gui)
+        self.assertIn("for entry in (self.source_entry, self.control_report_entry, self.output_entry)", app_gui)
+
     def test_gui_controller_requires_control_report_in_strict_mode(self) -> None:
         root = Path(__file__).resolve().parents[1]
         controller = GuiController(config_dir=root / "config")
@@ -1016,11 +1044,18 @@ class CodaMNDTest(unittest.TestCase):
         security = (root / "SECURITY.md").read_text(encoding="utf-8")
         user_guide = (root / "docs" / "guide_utilisateur.md").read_text(encoding="utf-8")
         site_html = (root / "docs" / "index.html").read_text(encoding="utf-8")
+        site_css = (root / "docs" / "assets" / "site.css").read_text(encoding="utf-8")
         site_js = (root / "docs" / "assets" / "site.js").read_text(encoding="utf-8")
 
         self.assertIn("Préparer une mise en ligne manuelle", workflow)
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("  push:\n", workflow)
+        self.assertIn("INPUT_TAG_NAME: ${{ inputs.tag_name }}", workflow)
+        self.assertIn('if ($tag -ne "v$version")', workflow)
+        self.assertIn("group: codamnd-release", workflow)
+        self.assertIn("timeout-minutes: 20", workflow)
+        self.assertIn('$env:GITHUB_REF_NAME -ne "main"', workflow)
+        self.assertIn("refs/remotes/origin/main", workflow)
         self.assertNotIn("WINDOWS_SIGNING_CERTIFICATE", workflow)
         self.assertNotIn("RequireSigned", publish_script)
         self.assertNotIn("SignWindowsExecutable", release_script)
@@ -1037,11 +1072,18 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("-portable\\.zip", site_js)
         self.assertIn("data-primary-download", site_html)
         self.assertNotIn("data-release-download", site_html)
-        self.assertIn("primaryDownloadLink.href = packageAsset.browser_download_url", site_js)
+        self.assertIn("primaryDownloadLink.href = trustedGithubUrl(packageAsset.browser_download_url, releaseUrl)", site_js)
         self.assertNotIn("downloadLink.href = packageAsset.browser_download_url", site_js)
         self.assertNotIn("Rapport VirusTotal disponible.", site_js)
-        self.assertIn("docs/releases/", site_js)
         self.assertIn("publicVirusTotalReportUrl(virusTotalAsset)", site_js)
+        self.assertIn("trustedGithubUrl(asset.browser_download_url, releasesUrl)", site_js)
+        self.assertIn("new AbortController()", site_js)
+        self.assertIn('card.setAttribute("aria-busy", "false")', site_js)
+        self.assertIn('class="skip-link"', site_html)
+        self.assertIn('aria-live="polite"', site_html)
+        self.assertIn(".release-card dl > div", site_css)
+        self.assertIn("word-break: break-all", site_css)
+        self.assertIn("prefers-reduced-motion", site_css)
         self.assertNotIn("virusTotalLink.href = virusTotalAsset.browser_download_url", site_js)
         self.assertNotIn("findAsset(assets, /\\.exe", site_js)
         self.assertIn("$PublicReportsDir = \"docs/releases\"", publish_script)
@@ -1052,6 +1094,13 @@ class CodaMNDTest(unittest.TestCase):
             self.assertIn("SmartScreen", document)
             self.assertIn("Exécuter quand même", document)
             self.assertIn("signée numériquement", document)
+
+    def test_runtime_and_build_dependency_floors_are_current_for_release(self) -> None:
+        pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+
+        self.assertIn('pdfplumber>=0.11.10,<0.12', pyproject)
+        self.assertIn('cx_Freeze>=8.7.0', pyproject)
+        self.assertIn('setuptools>=84.0.0', pyproject)
 
     def test_github_sponsor_link_is_exposed_in_app_and_public_docs(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1068,8 +1117,9 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("github: MathieuLF", funding)
         self.assertIn(f'SPONSOR_URL = "{sponsor_url}"', gui_texts)
         self.assertIn('SPONSOR_LINK_TEXT = "Sponsor GitHub"', gui_texts)
-        self.assertIn("Sponsor.TButton", app_gui)
-        self.assertIn("Sponsor.TButton", gui_theme)
+        self.assertIn("SPONSOR_LINK_TEXT", app_gui)
+        self.assertIn("Link.TLabel", gui_theme)
+        self.assertNotIn("Sponsor.TButton", gui_theme)
         self.assertIn("webbrowser.open(SPONSOR_URL)", app_gui)
         self.assertIn("webbrowser.open(SPONSOR_URL)", gui_dialogs)
         for document in (readme, site_html):
