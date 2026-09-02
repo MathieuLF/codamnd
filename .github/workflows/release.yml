@@ -13,9 +13,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: codamnd-release
+  cancel-in-progress: false
+
 jobs:
   draft-release:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -25,15 +30,32 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Déterminer la version
+      - name: Vérifier la source de publication
         shell: pwsh
         run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $tag = "${{ inputs.tag_name }}"
-            $version = "${{ inputs.version }}"
-          } else {
-            $tag = "${{ github.ref_name }}"
-            $version = $tag.TrimStart("v")
+          if ($env:GITHUB_REF_NAME -ne "main") {
+            throw "La mise en ligne doit partir de la branche main."
+          }
+          git fetch origin main
+          $head = (git rev-parse HEAD).Trim()
+          $originMain = (git rev-parse refs/remotes/origin/main).Trim()
+          if ($head -ne $originMain) {
+            throw "Le commit sélectionné ne correspond pas à origin/main."
+          }
+
+      - name: Déterminer la version
+        shell: pwsh
+        env:
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $tag = $env:INPUT_TAG_NAME.Trim()
+          $version = $env:INPUT_VERSION.Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "La version doit respecter le format majeur.mineur.correctif."
+          }
+          if ($tag -ne "v$version") {
+            throw "Le tag $tag ne correspond pas à la version $version."
           }
           "TAG_NAME=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append

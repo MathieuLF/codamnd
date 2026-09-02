@@ -7,6 +7,7 @@ import time
 import tkinter as tk
 import tkinter.font as tkfont
 import webbrowser
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -14,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from .config import load_app_config
 from .errors import ConfigurationError, ConversionError, ValidationFailed
 from .gui_controller import GuiController, GuiOperationResult
-from .gui_dialogs import show_legal_notice, show_security_window, show_support_window
+from .gui_dialogs import show_legal_notice, show_report_preview, show_security_window, show_support_window
 from .gui_state import (
     build_file_preview,
     build_output_preview,
@@ -57,6 +58,16 @@ SECURITY_TOOLTIP_TEXT = "\n".join(
         "SHA256 et rapports de sécurité vérifiables pour le ZIP officiel.",
     ]
 )
+
+
+@dataclass(frozen=True)
+class GuiOperationInputs:
+    source_path: str
+    control_report_path: str
+    output_dir: str
+    require_control_report: bool
+    write_report: bool
+    write_validation_json: bool
 
 
 def _status_icon_images() -> dict[str, tk.PhotoImage]:
@@ -465,6 +476,7 @@ class CodaMNDApp(tk.Tk):
         self.journal_summaries: list[tuple[str, str]] = []
         self._task_queue: queue.Queue[tuple[bool, object]] = queue.Queue()
         self._task_on_success = None
+        self._task_inputs: GuiOperationInputs | None = None
 
         configure_theme(self)
         self._build_ui()
@@ -499,10 +511,10 @@ class CodaMNDApp(tk.Tk):
         self.rowconfigure(1, weight=1)
 
         self._build_header().grid(row=0, column=0, sticky="ew")
-        self.scroll_area = ScrollableFrame(self, padding=(14, 8, 14, 2))
+        self.scroll_area = ScrollableFrame(self, padding=(14, 10, 14, 4))
         self.scroll_area.grid(row=1, column=0, sticky="nsew")
         body = self.scroll_area.content
-        body.columnconfigure(0, weight=7)
+        body.columnconfigure(0, weight=6)
         body.columnconfigure(1, weight=5)
         body.rowconfigure(0, weight=1)
 
@@ -527,14 +539,17 @@ class CodaMNDApp(tk.Tk):
         self.output_dir.trace_add("write", lambda *_: self._refresh_all())
 
     def _build_header(self) -> ttk.Frame:
-        header = ttk.Frame(self, style="Header.TFrame", padding=(16, 9))
+        header = ttk.Frame(self, style="Header.TFrame", padding=(16, 10))
         header.columnconfigure(0, weight=1)
         brand = ttk.Frame(header, style="Header.TFrame")
         brand.grid(row=0, column=0, sticky="w")
         brand.columnconfigure(1, weight=1)
         if hasattr(self, "_header_icon"):
             tk.Label(brand, image=self._header_icon, background=Palette.header, bd=0).grid(row=0, column=0, rowspan=2, padx=(0, 12))
-        ttk.Label(brand, text=APP_DISPLAY_NAME, style="HeaderTitle.TLabel").grid(row=0, column=1, sticky="w")
+        title_row = ttk.Frame(brand, style="Header.TFrame")
+        title_row.grid(row=0, column=1, sticky="w")
+        ttk.Label(title_row, text=APP_DISPLAY_NAME, style="HeaderTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(title_row, text=f"v{__version__}", style="Version.TLabel").grid(row=0, column=1, sticky="w", padx=(9, 0))
         ttk.Label(
             brand,
             text=APP_SUBTITLE,
@@ -554,7 +569,7 @@ class CodaMNDApp(tk.Tk):
 
     def _build_inputs_card(self, parent: ttk.Frame) -> ttk.Frame:
         card = _card(parent)
-        _card_title(card, "1", "Fichiers EmployeurD", "Ajoutez le TXT de paie. Le PDF GL peut confirmer les montants.").grid(row=0, column=0, columnspan=3, sticky="ew")
+        _card_title(card, "1", "Fichiers", "Ajoutez le TXT de paie et, si disponible, le PDF GL original.").grid(row=0, column=0, columnspan=3, sticky="ew")
         card.columnconfigure(1, weight=1)
 
         _file_heading(card, "Écriture détaillée EmployeurD (TXT)", "OBLIGATOIRE", "RequiredBadge.TLabel").grid(row=1, column=0, columnspan=3, sticky="ew", pady=(5, 0))
@@ -565,7 +580,8 @@ class CodaMNDApp(tk.Tk):
             wraplength=430,
             justify="left",
         ).grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 1))
-        ttk.Entry(card, textvariable=self.source_path).grid(row=3, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+        self.source_entry = ttk.Entry(card, textvariable=self.source_path)
+        self.source_entry.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(2, 0))
         self.source_button = ttk.Button(card, text=Text.choose, command=self._choose_source, style="Action.TButton")
         self.source_button.grid(row=3, column=2, sticky="e", padx=(10, 0), pady=(3, 0))
         self.source_meta = ttk.Label(card, text="", style="SmallMuted.TLabel", wraplength=430, justify="left")
@@ -580,7 +596,8 @@ class CodaMNDApp(tk.Tk):
             wraplength=430,
             justify="left",
         ).grid(row=7, column=0, columnspan=3, sticky="ew", pady=(1, 1))
-        ttk.Entry(card, textvariable=self.control_report_path).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(3, 0))
+        self.control_report_entry = ttk.Entry(card, textvariable=self.control_report_path)
+        self.control_report_entry.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(3, 0))
         report_actions = ttk.Frame(card, style="CardBody.TFrame")
         report_actions.grid(row=8, column=2, sticky="e", padx=(10, 0), pady=(3, 0))
         self.control_report_button = ttk.Button(report_actions, text=Text.choose, command=self._choose_control_report, style="Action.TButton")
@@ -593,7 +610,7 @@ class CodaMNDApp(tk.Tk):
 
     def _build_validation_card(self, parent: ttk.Frame) -> ttk.Frame:
         card = _card(parent)
-        _card_title(card, "2", "Concordance", "Avec le PDF GL, la création bloque si les montants ne concordent pas.").grid(row=0, column=0, sticky="ew")
+        _card_title(card, "2", "Contrôle GL", "Le PDF GL rend la concordance obligatoire avant la création.").grid(row=0, column=0, sticky="ew")
         self.validation_mode_label = ttk.Label(card, text="", style="HintInfo.TLabel", wraplength=430, justify="left")
         self.validation_mode_label.grid(row=1, column=0, sticky="ew", pady=(5, 4))
         self.require_control_report_check = CheckOption(
@@ -608,9 +625,10 @@ class CodaMNDApp(tk.Tk):
 
     def _build_output_card(self, parent: ttk.Frame) -> ttk.Frame:
         card = _card(parent)
-        _card_title(card, "3", "Destination", "Choisissez le dossier parent. L'application créera le sous-dossier horodaté.").grid(row=0, column=0, columnspan=3, sticky="ew")
+        _card_title(card, "3", "Destination", "Choisissez le dossier parent; un sous-dossier horodaté sera créé.").grid(row=0, column=0, columnspan=3, sticky="ew")
         card.columnconfigure(0, weight=1)
-        ttk.Entry(card, textvariable=self.output_dir).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        self.output_entry = ttk.Entry(card, textvariable=self.output_dir)
+        self.output_entry.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         self.output_button = ttk.Button(card, text=Text.choose, command=self._choose_output_dir, style="Action.TButton")
         self.output_button.grid(row=1, column=2, sticky="e", padx=(10, 0), pady=(6, 0))
         self.output_meta = ttk.Label(card, text="", style="SmallMuted.TLabel", wraplength=430, justify="left")
@@ -701,8 +719,10 @@ class CodaMNDApp(tk.Tk):
 
         secondary = ttk.Frame(bar, style="CardBody.TFrame")
         secondary.grid(row=0, column=2, sticky="e")
+        self.summary_button = ttk.Button(secondary, text=Text.view_summary, command=self._open_summary, style="Quiet.TButton")
+        self.summary_button.grid(row=0, column=0, padx=(0, 8))
         self.folder_button = ttk.Button(secondary, text=Text.open_folder, command=self._open_folder, style="Action.TButton")
-        self.folder_button.grid(row=0, column=0)
+        self.folder_button.grid(row=0, column=1)
         return bar
 
     def _build_footer(self) -> ttk.Frame:
@@ -711,12 +731,12 @@ class CodaMNDApp(tk.Tk):
         ttk.Label(footer, text=COPYRIGHT_TEXT, style="Footer.TLabel").grid(row=0, column=0, sticky="w")
         links = ttk.Frame(footer, style="App.TFrame")
         links.grid(row=0, column=1, sticky="e")
-        _link_label(links, Text.legal, lambda: show_legal_notice(self)).grid(row=0, column=0, padx=(0, 12))
-        _link_label(links, WEBSITE_LINK_TEXT, lambda: webbrowser.open(WEBSITE_URL)).grid(row=0, column=1, padx=(0, 12))
-        _link_label(links, REPOSITORY_LINK_TEXT, lambda: webbrowser.open(REPOSITORY_URL)).grid(row=0, column=2, padx=(0, 12))
-        ttk.Button(links, text=SPONSOR_LINK_TEXT, command=lambda: webbrowser.open(SPONSOR_URL), style="Sponsor.TButton").grid(row=0, column=3, padx=(0, 12))
-        _link_label(links, Text.security, self._show_security).grid(row=0, column=4, padx=(0, 12))
-        _link_label(links, Text.support, self._show_support).grid(row=0, column=5, padx=(0, 12))
+        _link_label(links, WEBSITE_LINK_TEXT, lambda: webbrowser.open(WEBSITE_URL)).grid(row=0, column=0, padx=(0, 12))
+        _link_label(links, REPOSITORY_LINK_TEXT, lambda: webbrowser.open(REPOSITORY_URL)).grid(row=0, column=1, padx=(0, 12))
+        _link_label(links, Text.security, self._show_security).grid(row=0, column=2, padx=(0, 12))
+        _link_label(links, Text.support, self._show_support).grid(row=0, column=3, padx=(0, 12))
+        _link_label(links, SPONSOR_LINK_TEXT, lambda: webbrowser.open(SPONSOR_URL)).grid(row=0, column=4, padx=(0, 12))
+        _link_label(links, Text.legal, lambda: show_legal_notice(self)).grid(row=0, column=5, padx=(0, 12))
         self.update_button = ttk.Button(links, text=Text.check_updates, command=lambda: self._check_update(silent=False), style="Quiet.TButton")
         self.update_button.grid(row=0, column=6)
         return footer
@@ -820,6 +840,7 @@ class CodaMNDApp(tk.Tk):
     def _run_background(self, title: str, worker, on_success) -> None:
         self.busy = True
         self._task_on_success = on_success
+        self._task_inputs = self._current_operation_inputs()
         self.status.set(title)
         self.status_detail.set("L'application vérifie les fichiers sur cet ordinateur.")
         self._refresh_all()
@@ -851,17 +872,38 @@ class CodaMNDApp(tk.Tk):
             self._operation_failed(payload)
 
     def _operation_succeeded(self, result: GuiOperationResult | UpdateCheckResult, on_success) -> None:
+        inputs_changed = self._task_inputs is not None and self._task_inputs != self._current_operation_inputs()
         self.busy = False
         self._task_on_success = None
+        self._task_inputs = None
         self.progress.stop()
         self.last_error = None
+        if inputs_changed:
+            self.last_result = None
+            self._clear_payroll_summaries()
+            self.status.set("Choix modifiés")
+            self.status_detail.set("Les fichiers ou options ont changé pendant l'opération. Vérifiez de nouveau.")
+            self._log_event("Résultat ignoré: les choix ont changé pendant l'opération.")
+            self._refresh_all()
+            return
         on_success(result)
         self._refresh_all()
 
     def _operation_failed(self, error: Exception) -> None:
+        inputs_changed = self._task_inputs is not None and self._task_inputs != self._current_operation_inputs()
         self.busy = False
         self._task_on_success = None
+        self._task_inputs = None
         self.progress.stop()
+        if inputs_changed:
+            self.last_result = None
+            self.last_error = None
+            self._clear_payroll_summaries()
+            self.status.set("Choix modifiés")
+            self.status_detail.set("Le résultat précédent ne correspond plus aux choix affichés.")
+            self._log_event("Ancien résultat écarté après une modification des choix.")
+            self._refresh_all()
+            return
         self._show_error(error)
         self._refresh_all()
 
@@ -902,6 +944,10 @@ class CodaMNDApp(tk.Tk):
         output = self._resolved_output_root()
         if output.exists():
             open_folder(output)
+
+    def _open_summary(self) -> None:
+        result = self.last_result.conversion if self.last_result else None
+        show_report_preview(self, result)
 
     def _show_security(self) -> None:
         show_security_window(
@@ -986,6 +1032,15 @@ class CodaMNDApp(tk.Tk):
         source_preview = build_file_preview(source, label="EmployeurD", suffixes=(".txt",), optional=False)
         if not source_preview.ok:
             raise ConversionError(source_preview.detail)
+        report_value = self.control_report_path.get().strip()
+        report_preview = build_file_preview(
+            report_value,
+            label="Rapport GL",
+            suffixes=(".pdf",),
+            optional=True,
+        )
+        if report_value and not report_preview.ok:
+            raise ConversionError(report_preview.detail)
         output_preview = build_output_preview(
             source,
             self.output_dir.get(),
@@ -1048,11 +1103,17 @@ class CodaMNDApp(tk.Tk):
         self.generate_button.configure(style="Primary.TButton" if can_generate else "Action.TButton")
         folder_available = bool(generated_files(self.last_result.conversion) if self.last_result and self.last_result.conversion else False) or self._resolved_output_root().exists()
         self.folder_button.state(["!disabled"] if folder_available and not self.busy else ["disabled"])
+        summary_available = bool(self.last_result and self.last_result.conversion)
+        self.summary_button.state(["!disabled"] if summary_available and not self.busy else ["disabled"])
         self.source_button.state(["disabled"] if self.busy else ["!disabled"])
         self.control_report_button.state(["disabled"] if self.busy else ["!disabled"])
         self.output_button.state(["disabled"] if self.busy else ["!disabled"])
+        for entry in (self.source_entry, self.control_report_entry, self.output_entry):
+            entry.state(["disabled"] if self.busy else ["!disabled"])
         self.report_option.state(["disabled"] if self.busy else ["!disabled"])
         self.json_option.state(["disabled"] if self.busy else ["!disabled"])
+        if hasattr(self, "update_button"):
+            self.update_button.state(["disabled"] if self.busy or self.update_check_running else ["!disabled"])
         if self.busy:
             self.progress.grid()
         else:
@@ -1110,26 +1171,32 @@ class CodaMNDApp(tk.Tk):
         screen_height = max(1, self.winfo_screenheight())
         horizontal_margin = 48 if screen_width >= 1280 else 24
         vertical_margin = 64 if screen_height >= 900 else 50
-        width = min(1360, max(1040, screen_width - horizontal_margin))
-        height = min(960, max(680, screen_height - vertical_margin))
+        width = min(1280, max(960, screen_width - horizontal_margin))
+        height = min(860, max(680, screen_height - vertical_margin))
         width = min(width, screen_width)
         height = min(height, screen_height)
         x = max(0, int((screen_width - width) / 2))
         y = max(0, int((screen_height - height) / 2))
         self.geometry(f"{width}x{height}+{x}+{y}")
-        self.minsize(min(1040, width), min(660, height))
+        self.minsize(min(960, width), min(640, height))
 
     def _can_validate(self) -> bool:
         if self.busy:
             return False
         source = build_file_preview(self.source_path.get(), label="EmployeurD", suffixes=(".txt",), optional=False)
+        report = build_file_preview(
+            self.control_report_path.get(),
+            label="Rapport GL",
+            suffixes=(".pdf",),
+            optional=True,
+        )
         output = build_output_preview(
             self.source_path.get(),
             self.output_dir.get(),
             include_report=self.write_report_md.get(),
             include_validation_json=self.write_validation_json.get(),
         )
-        return source.ok and output.ok
+        return source.ok and report.ok and output.ok
 
     def _can_generate(self) -> bool:
         return bool(self._can_validate() and self.last_result and self.last_result.ok)
@@ -1155,6 +1222,16 @@ class CodaMNDApp(tk.Tk):
     def _resolved_output_root(self) -> Path:
         output = self.output_dir.get().strip()
         return Path(output) if output else default_output_root()
+
+    def _current_operation_inputs(self) -> GuiOperationInputs:
+        return GuiOperationInputs(
+            source_path=self.source_path.get().strip(),
+            control_report_path=self.control_report_path.get().strip(),
+            output_dir=self.output_dir.get().strip(),
+            require_control_report=self.require_control_report.get(),
+            write_report=self.write_report_md.get(),
+            write_validation_json=self.write_validation_json.get(),
+        )
 
     def _log_event(self, message: str) -> None:
         self.activity_log.append(_timestamped(message))

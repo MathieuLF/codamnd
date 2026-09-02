@@ -35,6 +35,7 @@ credentials/
 notes-privees/
 
 outputs/
+output/
 logs/
 dist/
 build/
