@@ -7,7 +7,7 @@ license = "MIT"
 dependencies = ["pdfplumber>=0.11.10,<0.12"]
 
 [project.optional-dependencies]
-build = ["cx_Freeze>=8.7.0"]
+build = ["cx_Freeze==8.6.4", "freeze-core==0.6.1"]
 
 [build-system]
 requires = ["setuptools>=84.0.0"]
