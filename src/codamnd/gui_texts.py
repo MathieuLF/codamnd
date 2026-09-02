@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 APP_DISPLAY_NAME = "CodaMND"
-APP_SUBTITLE = "Ajoutez l'écriture de paie, confirmez les soldes au besoin, puis créez le fichier MND."
+APP_SUBTITLE = "EmployeurD vers MégaGest · traitement local"
 COPYRIGHT_TEXT = "© 2026 Mathieu Lapointe-Fiset"
 WEBSITE_URL = "https://codamnd.nethercore.dev"
 REPOSITORY_URL = "https://github.com/MathieuLF/codamnd"
@@ -35,6 +35,7 @@ class Text:
     validate_payroll = "Vérifier la paie"
     generate_mnd = "Créer le MND"
     open_folder = "Ouvrir la sortie"
+    view_summary = "Voir le résumé"
     check_updates = "Vérifier la version"
     security = "Sécurité"
     support = "Support"

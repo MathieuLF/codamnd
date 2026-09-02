@@ -5,33 +5,31 @@ from tkinter import ttk
 
 
 class Palette:
-    background = "#f5f5f5"
+    background = "#f3f6f5"
     surface = "#ffffff"
-    surface_alt = "#fafafa"
-    surface_hover = "#f3f8ff"
+    surface_alt = "#f8faf9"
+    surface_hover = "#edf7f4"
     header = "#ffffff"
     header_muted = "#5f6b7a"
-    text = "#1f1f1f"
-    muted = "#616161"
-    border = "#e0e0e0"
-    border_strong = "#c7c7c7"
-    primary = "#0f6cbd"
-    primary_hover = "#115ea3"
-    primary_pressed = "#0f548c"
-    primary_dark = "#0b4a7a"
-    sponsor = "#bf3989"
-    sponsor_hover = "#a53178"
-    sponsor_pressed = "#83245f"
+    text = "#17212c"
+    muted = "#596673"
+    border = "#dce3e1"
+    border_strong = "#bccbc7"
+    primary = "#0f766e"
+    primary_hover = "#0b685f"
+    primary_pressed = "#09584f"
+    primary_dark = "#0b4f4a"
+    link = "#1d4ed8"
     success = "#107c10"
     success_bg = "#f1faf1"
     warning = "#8a5a00"
     warning_bg = "#fff8e1"
     danger = "#c50f1f"
     danger_bg = "#fdf3f4"
-    info_bg = "#eef6fc"
+    info_bg = "#edf7f4"
     disabled = "#a19f9d"
     disabled_bg = "#f3f2f1"
-    focus = "#005fb8"
+    focus = "#0f766e"
 
 
 def configure_theme(root: tk.Tk) -> None:
@@ -52,8 +50,9 @@ def configure_theme(root: tk.Tk) -> None:
     style.configure("CardAlt.TFrame", background=Palette.surface_alt)
     style.configure("SectionRail.TFrame", background=Palette.primary)
     style.configure("Header.TFrame", background=Palette.header)
-    style.configure("HeaderTitle.TLabel", background=Palette.header, foreground=Palette.text, font=("Segoe UI Semibold", 16))
+    style.configure("HeaderTitle.TLabel", background=Palette.header, foreground=Palette.text, font=("Segoe UI Semibold", 15))
     style.configure("HeaderMeta.TLabel", background=Palette.header, foreground=Palette.header_muted, font=("Segoe UI", 10))
+    style.configure("Version.TLabel", background=Palette.info_bg, foreground=Palette.primary_dark, font=("Segoe UI Semibold", 8), padding=(7, 3))
     style.configure("HeaderBadge.TLabel", background=Palette.info_bg, foreground=Palette.primary_dark, font=("Segoe UI Semibold", 9), padding=(9, 4))
     style.configure("Title.TLabel", background=Palette.surface, foreground=Palette.text, font=("Segoe UI Semibold", 10))
     style.configure("RequiredBadge.TLabel", background=Palette.danger_bg, foreground=Palette.danger, font=("Segoe UI Semibold", 8), padding=(8, 3))
@@ -66,8 +65,8 @@ def configure_theme(root: tk.Tk) -> None:
     style.configure("SmallMuted.TLabel", background=Palette.surface, foreground=Palette.muted, font=("Segoe UI", 9))
     style.configure("Footer.TLabel", background=Palette.background, foreground=Palette.muted, font=("Segoe UI", 9))
     style.configure("SurfaceFooter.TLabel", background=Palette.surface, foreground=Palette.muted, font=("Segoe UI", 9))
-    style.configure("Link.TLabel", background=Palette.background, foreground=Palette.primary, font=("Segoe UI Semibold", 9))
-    style.configure("CardLink.TLabel", background=Palette.surface, foreground=Palette.primary, font=("Segoe UI Semibold", 9))
+    style.configure("Link.TLabel", background=Palette.background, foreground=Palette.link, font=("Segoe UI Semibold", 9))
+    style.configure("CardLink.TLabel", background=Palette.surface, foreground=Palette.link, font=("Segoe UI Semibold", 9))
     style.configure("StatusTitle.TLabel", background=Palette.surface, foreground=Palette.text, font=("Segoe UI Semibold", 14))
     style.configure("PanelEyebrow.TLabel", background=Palette.surface, foreground=Palette.primary_dark, font=("Segoe UI Semibold", 9))
     style.configure("StepBadge.TLabel", background=Palette.info_bg, foreground=Palette.primary_dark, font=("Segoe UI Semibold", 10), padding=(9, 5))
@@ -105,17 +104,6 @@ def configure_theme(root: tk.Tk) -> None:
         focusthickness=1,
         focuscolor=Palette.focus,
     )
-    style.configure(
-        "Sponsor.TButton",
-        padding=(12, 7),
-        background=Palette.sponsor,
-        foreground="#ffffff",
-        bordercolor=Palette.sponsor,
-        lightcolor=Palette.sponsor,
-        darkcolor=Palette.sponsor,
-        focusthickness=1,
-        focuscolor=Palette.focus,
-    )
     style.map(
         "Primary.TButton",
         background=[
@@ -137,17 +125,6 @@ def configure_theme(root: tk.Tk) -> None:
         "Quiet.TButton",
         background=[("disabled", Palette.disabled_bg), ("pressed", "#ededed"), ("active", "#f7f7f7"), ("!disabled", Palette.surface_alt)],
         foreground=[("disabled", Palette.disabled), ("!disabled", Palette.text)],
-    )
-    style.map(
-        "Sponsor.TButton",
-        background=[
-            ("disabled", Palette.disabled_bg),
-            ("pressed", Palette.sponsor_pressed),
-            ("active", Palette.sponsor_hover),
-            ("!disabled", Palette.sponsor),
-        ],
-        foreground=[("disabled", Palette.disabled), ("!disabled", "#ffffff")],
-        bordercolor=[("disabled", Palette.disabled_bg), ("!disabled", Palette.sponsor)],
     )
     style.configure(
         "TEntry",

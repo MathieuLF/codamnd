@@ -1,14 +1,16 @@
 :root {
-  --bg: #f6f7f9;
+  --bg: #f3f6f5;
   --paper: #ffffff;
   --ink: #17212c;
   --muted: #596673;
-  --line: #dce3e8;
+  --line: #dce3e1;
+  --line-strong: #bccbc7;
   --green: #0f766e;
+  --green-dark: #0b4f4a;
   --blue: #1d4ed8;
   --sponsor: #bf3989;
   --sponsor-hover: #a53178;
-  --shadow: 0 18px 44px rgba(23, 33, 44, 0.1);
+  --shadow: 0 18px 44px rgba(23, 33, 44, 0.09);
 }
 
 * {
@@ -38,6 +40,29 @@ a {
   text-underline-offset: 3px;
 }
 
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.32);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 10px;
+  left: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: #ffffff;
+  font-weight: 700;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .site-header {
   position: sticky;
   top: 0;
@@ -49,7 +74,7 @@ a {
   padding: 16px clamp(18px, 4vw, 56px);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 10px 28px rgba(23, 33, 44, 0.06);
+  box-shadow: 0 8px 24px rgba(23, 33, 44, 0.05);
 }
 
 .brand {
@@ -86,23 +111,23 @@ nav a:focus {
 
 .download {
   padding: 8px 13px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ink);
+  border: 1px solid var(--green);
+  border-radius: 9px;
+  color: var(--green-dark);
   font-weight: 700;
 }
 
 main {
-  width: min(1080px, calc(100% - 36px));
+  width: min(1120px, calc(100% - 36px));
   margin: 0 auto;
 }
 
 .intro {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
-  gap: 40px;
+  gap: 44px;
   align-items: center;
-  padding: 72px 0 40px;
+  padding: 64px 0 42px;
 }
 
 .intro > * {
@@ -160,9 +185,10 @@ h2 {
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 10px;
   font-weight: 800;
   text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
 
 .button.primary {
@@ -183,7 +209,8 @@ h2 {
 
 .button:hover,
 .button:focus {
-  filter: brightness(0.96);
+  filter: brightness(0.97);
+  transform: translateY(-1px);
 }
 
 .button.sponsor:hover,
@@ -199,9 +226,10 @@ h2 {
 
 .release-card {
   min-width: 0;
-  padding: 24px;
+  padding: 26px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-top: 4px solid var(--green);
+  border-radius: 14px;
   background: var(--paper);
   box-shadow: var(--shadow);
 }
@@ -220,6 +248,13 @@ h2 {
   display: grid;
   gap: 16px;
   margin: 0 0 12px;
+}
+
+.release-card dl > div,
+.release-card dt,
+.release-card dd {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .release-card dt {
@@ -243,14 +278,16 @@ h2 {
   max-width: 100%;
   padding: 9px 10px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  width: 100%;
+  min-width: 0;
+  border-radius: 8px;
   background: #f8fafc;
   color: #26323f;
   font-size: 0.72rem;
   line-height: 1.45;
-  overflow-x: auto;
-  overflow-wrap: normal;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
 }
 
 .release-card a {
@@ -271,7 +308,7 @@ h2 {
   min-height: 40px;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 9px;
   background: #ffffff;
   color: var(--ink);
   font-size: 0.92rem;
@@ -303,7 +340,7 @@ h2 {
 .screen img {
   display: block;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 14px;
   background: var(--paper);
   box-shadow: var(--shadow);
 }
@@ -315,7 +352,7 @@ h2 {
 }
 
 .section {
-  padding: 48px 0;
+  padding: 44px 0;
   border-top: 1px solid var(--line);
 }
 
@@ -341,7 +378,8 @@ h2 {
   padding: 20px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(23, 33, 44, 0.03);
 }
 
 .card-grid strong {
@@ -440,8 +478,13 @@ footer a {
   }
 
   .site-header {
+    position: static;
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  .release-card {
+    padding: 20px;
   }
 
   .button {
@@ -454,5 +497,16 @@ footer a {
 
   .release-actions a[data-release-page] {
     grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .button,
+  .skip-link {
+    transition: none;
   }
 }
