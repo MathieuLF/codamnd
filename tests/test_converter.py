@@ -1050,6 +1050,7 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("Préparer une mise en ligne manuelle", workflow)
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("  push:\n", workflow)
+        self.assertIn('python-version: "3.14"', workflow)
         self.assertIn("INPUT_TAG_NAME: ${{ inputs.tag_name }}", workflow)
         self.assertIn('if ($tag -ne "v$version")', workflow)
         self.assertIn("group: codamnd-release", workflow)
@@ -1101,7 +1102,8 @@ class CodaMNDTest(unittest.TestCase):
         pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
 
         self.assertIn('pdfplumber>=0.11.10,<0.12', pyproject)
-        self.assertIn('cx_Freeze>=8.7.0', pyproject)
+        self.assertIn('cx_Freeze==8.6.4', pyproject)
+        self.assertIn('freeze-core==0.6.1', pyproject)
         self.assertIn('setuptools>=84.0.0', pyproject)
 
     def test_github_sponsor_link_is_exposed_in_app_and_public_docs(self) -> None:
