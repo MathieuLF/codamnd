@@ -932,7 +932,7 @@ class CodaMNDApp(tk.Tk):
         self._log_event("Problème à corriger. Création du MND désactivée.")
         messagebox.showerror(
             "À corriger avant de créer le MND",
-            f"{friendly_error_message(error)}\n\nDétails à transmettre au support:\n{technical_error_message(error)}",
+            f"{friendly_error_message(error)}\n\nCodes non confidentiels à transmettre au support:\n{technical_error_message(error)}",
         )
 
     def _open_folder(self) -> None:

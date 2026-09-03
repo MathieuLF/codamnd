@@ -28,6 +28,10 @@ def default_config_dir() -> Path:
         if bundled_config.exists():
             return bundled_config
 
+    if getattr(sys, "frozen", False):
+        bundled_config = Path(sys.executable).resolve().parent / "config"
+        return bundled_config
+
     cwd_config = Path.cwd() / "config"
     if cwd_config.exists():
         return cwd_config

@@ -1,10 +1,11 @@
 param(
-    [string]$Name = "CodaMND",
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = "0.1.0",
     [string]$Python = ""
 )
 
 $ErrorActionPreference = "Stop"
+$Name = "CodaMND"
 
 $PythonExe = $Python
 if (-not $PythonExe) {

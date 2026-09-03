@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import struct
 import subprocess
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 SHA256_RE = re.compile(r"\b[a-fA-F0-9]{64}\b")
+MAX_ZIP_EXECUTABLE_BYTES = 256 * 1024 * 1024
 
 
 def main() -> int:
@@ -50,13 +53,24 @@ def main() -> int:
         issues.append("L'empreinte SHA256 du paquet portable ne correspond pas au fichier .sha256.")
     if package_sha_file.exists() and not package_sha256:
         issues.append("L'empreinte SHA256 du paquet applicatif est illisible.")
+    if portable_zip.exists():
+        try:
+            zipped_exe_sha256 = zip_member_sha256(portable_zip, f"{name}/{exe.name}")
+        except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
+            issues.append(f"Le contenu du paquet portable est invalide: {error}")
+        else:
+            if exe_sha256 and zipped_exe_sha256.lower() != exe_sha256.lower():
+                issues.append("L'exécutable contenu dans le ZIP ne correspond pas à l'exécutable contrôlé.")
 
     virustotal = parse_virustotal_report(vt_report)
+    virustotal_provenance_valid = is_clean_virustotal_report(virustotal, exe_sha256)
     if args.require_clean_virustotal:
         if not vt_report.exists():
             issues.append(f"Rapport VirusTotal manquant: {vt_report}")
-        if virustotal.get("malicious", 0) or virustotal.get("suspicious", 0):
-            issues.append("Le rapport VirusTotal contient une détection malicious ou suspicious.")
+        elif not virustotal_provenance_valid:
+            issues.append(
+                "Le rapport VirusTotal doit confirmer l'exécutable exact, une analyse completed et 0 malicious / 0 suspicious."
+            )
 
     if issues:
         for issue in issues:
@@ -107,8 +121,9 @@ def main() -> int:
         ],
         "virustotal": virustotal,
         "privacy": {
-            "payroll_files_submitted": False,
-            "only_public_executable_submitted": True,
+            "payroll_files_submitted": False if virustotal_provenance_valid else None,
+            "only_public_executable_submitted": virustotal_provenance_valid,
+            "report_bound_to_public_executable": virustotal_provenance_valid,
         },
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -118,12 +133,29 @@ def main() -> int:
 
 
 def sha256_file(path: Path) -> str:
-    import hashlib
-
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def zip_member_sha256(path: Path, member_name: str) -> str:
+    with zipfile.ZipFile(path) as archive:
+        matches = [info for info in archive.infolist() if info.filename == member_name]
+        if len(matches) != 1 or matches[0].is_dir():
+            raise ValueError(f"le ZIP doit contenir exactement un fichier {member_name}.")
+        member = matches[0]
+        if member.file_size > MAX_ZIP_EXECUTABLE_BYTES:
+            raise ValueError("l'exécutable contenu dans le ZIP dépasse la taille maximale permise.")
+        digest = hashlib.sha256()
+        total = 0
+        with archive.open(member) as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                total += len(chunk)
+                if total > MAX_ZIP_EXECUTABLE_BYTES:
+                    raise ValueError("l'exécutable contenu dans le ZIP dépasse la taille maximale permise.")
+                digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -139,6 +171,7 @@ def parse_virustotal_report(path: Path) -> dict[str, Any]:
         "status": "n/d",
         "malicious": None,
         "suspicious": None,
+        "sha256": "",
         "link": "",
     }
     if not path.exists():
@@ -147,6 +180,9 @@ def parse_virustotal_report(path: Path) -> dict[str, Any]:
         stripped = line.strip()
         if stripped.startswith("- Soumis à VirusTotal :"):
             result["submitted"] = stripped.endswith("oui")
+        elif stripped.startswith("- SHA256 :"):
+            match = SHA256_RE.search(stripped)
+            result["sha256"] = match.group(0).lower() if match else ""
         elif stripped.startswith("- Statut :"):
             result["status"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("- Lien :"):
@@ -158,15 +194,36 @@ def parse_virustotal_report(path: Path) -> dict[str, Any]:
     return result
 
 
+def is_clean_virustotal_report(report: dict[str, Any], exe_sha256: str) -> bool:
+    normalized_sha256 = exe_sha256.lower()
+    return (
+        report.get("submitted") is True
+        and report.get("status") == "completed"
+        and isinstance(report.get("malicious"), int)
+        and not isinstance(report.get("malicious"), bool)
+        and isinstance(report.get("suspicious"), int)
+        and not isinstance(report.get("suspicious"), bool)
+        and report.get("malicious") == 0
+        and report.get("suspicious") == 0
+        and str(report.get("sha256") or "").lower() == normalized_sha256
+        and report.get("link") == f"https://www.virustotal.com/gui/file/{normalized_sha256}"
+    )
+
+
 def authenticode_status(path: Path) -> str:
     pe_status = pe_certificate_status(path)
     if pe_status == "NotSigned":
         return pe_status
 
+    system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR")
+    powershell = Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe" if system_root else None
+    if powershell is None or not powershell.is_file():
+        return pe_status or "Non vérifiée"
+
     try:
         completed = subprocess.run(
             [
-                "powershell",
+                str(powershell),
                 "-NoProfile",
                 "-Command",
                 "$path = $env:CODAMND_SIGNATURE_PATH; Import-Module Microsoft.PowerShell.Security; (Get-AuthenticodeSignature -LiteralPath $path).Status",
@@ -176,6 +233,7 @@ def authenticode_status(path: Path) -> str:
             check=False,
             timeout=10,
             env={**os.environ, "CODAMND_SIGNATURE_PATH": str(path.resolve())},
+            cwd=Path(__file__).resolve().parents[1],
         )
     except FileNotFoundError:
         return pe_status or "Non vérifiée"
