@@ -119,8 +119,10 @@ def main() -> int:
 
     if issues:
         print("Préparation de mise en ligne: problèmes à corriger", file=sys.stderr)
-        for issue in issues:
-            print(f"- {issue}", file=sys.stderr)
+        print(
+            f"- {len(issues)} contrôle(s) en échec; détails volontairement omis de la sortie publique.",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Préparation de mise en ligne OK pour v{args.version}")
