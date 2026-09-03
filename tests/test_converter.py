@@ -954,6 +954,7 @@ class CodaMNDTest(unittest.TestCase):
             cwd_dir = root / "launcher"
             (app_dir / "config").mkdir(parents=True)
             (cwd_dir / "config").mkdir(parents=True)
+            expected = (app_dir / "config").resolve()
             with (
                 patch.object(sys, "frozen", True, create=True),
                 patch.object(sys, "executable", str(app_dir / "CodaMND.exe")),
@@ -961,7 +962,7 @@ class CodaMNDTest(unittest.TestCase):
             ):
                 resolved = default_config_dir()
 
-        self.assertEqual(resolved, app_dir / "config")
+        self.assertEqual(resolved, expected)
 
     def test_windows_signature_status_passes_path_as_powershell_argument(self) -> None:
         malicious_paths = (
