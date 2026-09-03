@@ -17,6 +17,8 @@ Téléchargez l'application depuis la page officielle des versions GitHub.
 
 Chaque version publique doit fournir les empreintes SHA256. Le paquet Windows officiel est un ZIP portable accompagné d'un manifeste de mise en ligne et d'un rapport VirusTotal sur l'exécutable public seulement.
 
+La publication refuse un rapport VirusTotal incomplet ou associé à un autre exécutable. Les dépendances et les automatisations utilisées pour produire le paquet sont verrouillées et vérifiées avant la mise en ligne.
+
 Aucun certificat de signature payant n'est utilisé. SmartScreen peut donc afficher un avertissement de sécurité ou d'application non reconnue au premier lancement.
 
 Si le fichier provient bien de la page officielle GitHub Releases, ouvrez `Informations complémentaires`, puis choisissez `Exécuter quand même`. Ce message s'affiche parce que l'application n'est pas signée numériquement, pas parce qu'elle transmet des fichiers de paie.

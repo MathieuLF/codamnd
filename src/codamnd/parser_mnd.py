@@ -11,11 +11,17 @@ from .writer_mnd import MND_LINE_LENGTH
 
 
 MND_AMOUNT_PATTERN = re.compile(r"^\d{10}\.\d{2}$")
+MAX_MND_BYTES = 50 * 1024 * 1024
+MAX_MND_LINES = 100_000
+MAX_VALIDATION_ERRORS = 100
 
 
 def parse_mnd_file(path: Path, *, require_crlf: bool = True, encoding: str = "cp1252") -> list[MndEntry]:
     try:
-        content = path.read_bytes()
+        with path.open("rb") as handle:
+            content = handle.read(MAX_MND_BYTES + 1)
+        if len(content) > MAX_MND_BYTES:
+            raise ValidationFailed(f"Le fichier MND dépasse la limite de {MAX_MND_BYTES // (1024 * 1024)} Mo.")
     except OSError as error:
         raise FileOperationError(f"Impossible de lire le fichier MND: {path}") from error
 
@@ -33,6 +39,13 @@ def parse_mnd_text(text: str, *, require_crlf: bool = True) -> list[MndEntry]:
         normalized = text.replace("\r\n", "")
         if "\r" in normalized or "\n" in normalized:
             raise ValidationFailed("Les fins de ligne MND doivent être CRLF.")
+        line_count = text.count("\r\n") + (0 if text.endswith("\r\n") else 1)
+    else:
+        line_count = len(re.findall(r"\r\n|[\n\v\f\r\x1c-\x1e\x85\u2028\u2029]", text)) + (
+            0 if text.endswith(("\r", "\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029")) else 1
+        )
+    if line_count > MAX_MND_LINES:
+        raise ValidationFailed(f"Le fichier MND dépasse la limite de {MAX_MND_LINES} lignes.")
 
     if "\r\n" in text:
         lines = text.split("\r\n")
@@ -40,7 +53,6 @@ def parse_mnd_text(text: str, *, require_crlf: bool = True) -> list[MndEntry]:
         lines = text.splitlines()
     if lines and lines[-1] == "":
         lines = lines[:-1]
-
     entries: list[MndEntry] = []
     errors: list[ErrorDetail] = []
     for line_number, line in enumerate(lines, start=1):
@@ -48,6 +60,15 @@ def parse_mnd_text(text: str, *, require_crlf: bool = True) -> list[MndEntry]:
             entries.append(parse_mnd_line(line, line_number))
         except ValidationFailed as error:
             errors.extend(error.errors)
+        if len(errors) >= MAX_VALIDATION_ERRORS:
+            errors = errors[:MAX_VALIDATION_ERRORS]
+            errors.append(
+                ErrorDetail(
+                    "mnd_too_many_errors",
+                    f"Validation interrompue après {MAX_VALIDATION_ERRORS} erreurs.",
+                )
+            )
+            break
     if errors:
         raise ValidationFailed(errors)
     if not entries:

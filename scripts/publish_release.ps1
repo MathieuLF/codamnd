@@ -10,7 +10,6 @@ param(
     [switch]$PublishNow,
     [switch]$SubmitVirusTotal,
     [switch]$AllowVirusTotalDetections,
-    [string]$VirusTotalApiKey = "",
     [int]$VirusTotalWaitMinutes = 10
 )
 
@@ -65,6 +64,10 @@ if (-not $AllowDirtyStart) {
     }
 }
 
+if ($Push -or $CreateGitHubRelease) {
+    Assert-OfficialReleaseMainState
+}
+
 $VersionTemp = New-TemporaryFile
 $PrepareArgs = @("scripts/prepare_release.py", "--write", "--version-output", $VersionTemp.FullName)
 if ($Version) {
@@ -84,7 +87,7 @@ $Tag = "v$ReleaseVersion"
 
 Write-Host "Mise en ligne préparée pour v$ReleaseVersion"
 
-if ($CreateGitHubRelease) {
+if ($Push -or $CreateGitHubRelease) {
     Assert-NoExistingReleaseTarget $Tag
 }
 
@@ -107,9 +110,6 @@ if ($SubmitVirusTotal) {
     )
     if (-not $AllowVirusTotalDetections) {
         $VtArgs += "--fail-on-detections"
-    }
-    if ($VirusTotalApiKey) {
-        $VtArgs += @("--api-key", $VirusTotalApiKey)
     }
     python @VtArgs
     Assert-LastExitCode "Soumission VirusTotal impossible"
