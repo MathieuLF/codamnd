@@ -4,6 +4,8 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.1] - 2026-09-02
+
 - Renforce la confidentialité des diagnostics et des résumés copiés depuis l'application.
 - Traite chaque fichier à partir d'une copie stable en mémoire et borne la lecture des fichiers anormalement volumineux.
 - Durcit la vérification des mises à jour, de la signature Windows et des rapports VirusTotal.
