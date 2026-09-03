@@ -1,7 +1,7 @@
 # CodaMND
 
 <p align="center">
-  <strong>Créer un fichier MND pour MégaGest à partir d'une écriture détaillée EmployeurD.</strong>
+  <strong>De l'écriture détaillée EmployeurD au fichier MND, simplement.</strong>
 </p>
 
 ![Aperçu de l'application](docs/assets/screenshots/v0.2.0/app-main.jpg)
@@ -12,30 +12,37 @@
 
 ## En bref
 
-CodaMND est un utilitaire Windows qui prépare un fichier `.mnd` pour MégaGest à partir d'une écriture détaillée EmployeurD au format TXT.
+CodaMND est une application Windows qui transforme une écriture détaillée EmployeurD au format TXT en fichier `.mnd` que vous pourrez ensuite vérifier dans MégaGest.
 
-Le rapport recommandé est le PDF original du grand détail de l'écriture GL. Il confirme les totaux et les montants par compte avant la création du MND. Il doit venir d'EmployeurD, sans numérisation ni modification.
+Avant de créer le fichier, l'application vérifie notamment la structure de l'écriture et l'équilibre entre les débits et les crédits. Vous pouvez aussi ajouter le PDF original du grand détail GL produit par EmployeurD afin de comparer les totaux et les montants par compte.
 
-Le dépôt public contient le code de l'utilitaire et ses validations. Il ne décrit ni ne garantit aucun hébergement exploité par son auteur; les versions distribuées sont celles de GitHub Releases.
+Tout se fait sur votre ordinateur : CodaMND n'envoie pas vos fichiers de paie sur Internet.
 
-## Cycle de vie
+## Télécharger CodaMND
 
-CodaMND est un utilitaire local maintenu et versionné par GitHub Releases. Une publication GitHub atteste un artefact disponible, pas l'état d'un service hébergé.
+Les versions officielles se trouvent sur la page [GitHub Releases](https://github.com/MathieuLF/codamnd/releases). Téléchargez le fichier `CodaMND-v*-portable.zip`, puis extrayez-le avant d'ouvrir l'application.
 
-## Utiliser l'application
+## Comment l'utiliser
 
-1. Télécharger la dernière version depuis [GitHub Releases](https://github.com/MathieuLF/codamnd/releases).
-2. Extraire le fichier zip.
-3. Ouvrir l'application incluse dans le ZIP.
-4. Ajouter l'écriture EmployeurD TXT.
-5. Ajouter le PDF original du grand détail GL au besoin.
-6. Vérifier la paie, puis créer le MND si tout est conforme.
+1. Ajoutez l'écriture détaillée EmployeurD au format TXT.
+2. Ajoutez, si vous l'avez, le PDF original du grand détail GL. Un PDF numérisé ou modifié ne pourra pas être vérifié de façon fiable.
+3. Cliquez sur `Vérifier la paie`.
+4. Si tout est conforme, cliquez sur `Créer le MND`.
+5. Testez toujours le fichier obtenu dans MégaGest hors production avant de l'utiliser réellement.
+
+Sans dossier de sortie choisi, CodaMND place les résultats dans un nouveau dossier horodaté sous `Documents`.
 
 ### Première ouverture sur Windows
 
-Windows SmartScreen peut afficher un avertissement de sécurité au premier lancement. C'est attendu : l'application est publique et vérifiable, mais elle n'est pas signée numériquement.
+Windows SmartScreen peut afficher un avertissement au premier lancement, car l'application n'est pas signée numériquement.
 
-Si le fichier provient bien de la page officielle GitHub Releases, cliquez sur `Informations complémentaires`, puis sur `Exécuter quand même`.
+Si vous avez téléchargé le ZIP depuis la page officielle GitHub Releases, choisissez `Informations complémentaires`, puis `Exécuter quand même`.
+
+## Vos données restent privées
+
+Les fichiers traités restent sur votre ordinateur. Ne publiez jamais un fichier de paie réel, un rapport GL, un fichier MND ou une capture contenant des renseignements personnels dans GitHub ou dans un autre service public.
+
+Pour demander de l'aide, décrivez le problème avec un exemple fictif ou une capture soigneusement anonymisée. Consultez [Sécurité](SECURITY.md) et [Support](SUPPORT.md) pour savoir quoi inclure.
 
 ## Pages utiles
 
@@ -47,7 +54,9 @@ Si le fichier provient bien de la page officielle GitHub Releases, cliquez sur `
 - [Mentions légales](docs/mentions_legales.md)
 - [Licence MIT](LICENSE)
 
-## Développement
+## Contribuer
+
+Le code source est public sous licence MIT. Pour préparer l'environnement de développement et lancer la validation complète :
 
 ```powershell
 python -m pip install -e .
@@ -56,14 +65,6 @@ python scripts/agent_validate.py
 
 La validation courante ne demande ni base de données, ni serveur, ni clé secrète.
 
-## Important
-
-Ne publiez jamais de fichier de paie réel dans GitHub, dans un billet public ou dans un service externe.
-
-EmployeurD, PG Solutions, MégaGest et les autres marques citées appartiennent à leurs propriétaires respectifs.
-
-Les fichiers traités restent locaux à l'application. Le dépôt, les demandes de soutien et les rapports de bogue ne doivent contenir ni données de paie, ni renseignements personnels, ni secrets.
-
 ## Licence
 
-CodaMND est distribué sous licence MIT. Voir [LICENSE](LICENSE).
+CodaMND est distribué sous licence MIT. EmployeurD, PG Solutions, MégaGest et les autres marques citées appartiennent à leurs propriétaires respectifs.
