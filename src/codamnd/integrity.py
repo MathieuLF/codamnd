@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
 from .update_check import (
+    DEFAULT_UPDATE_URL,
     DEFAULT_TIMEOUT_SECONDS,
     NETWORK_ERRORS,
     _fetch_json,
@@ -77,7 +80,11 @@ def check_running_app_integrity(
     if not local.local_sha256:
         return _with_status(local, "unavailable", "Impossible de calculer l'empreinte de l'exécutable ouvert.")
 
-    release_url = release_url_for_version(update_url, current_version)
+    # La racine de confiance de la vérification officielle ne doit jamais venir
+    # d'une configuration locale modifiable. ``update_url`` reste accepté pour
+    # compatibilité d'API, mais n'est volontairement pas utilisé ici.
+    del update_url
+    release_url = release_url_for_version(DEFAULT_UPDATE_URL, current_version)
     try:
         payload = _fetch_json(release_url, timeout=timeout)
     except urllib.error.HTTPError as error:
@@ -108,7 +115,7 @@ def check_running_app_integrity(
     expected = extract_sha256(payload.get("package_sha256"))
     if not expected:
         sha256_url = release_asset_url(payload, ".package.sha256", version=current_version)
-        if sha256_url:
+        if sha256_url and _is_official_github_url(sha256_url):
             try:
                 expected = extract_sha256(_fetch_text(sha256_url, timeout=timeout))
             except NETWORK_ERRORS:
@@ -116,7 +123,7 @@ def check_running_app_integrity(
     if not expected:
         expected_kind = "exe"
         sha256_url = release_asset_url(payload, ".exe.sha256", version=current_version)
-        if sha256_url:
+        if sha256_url and _is_official_github_url(sha256_url):
             try:
                 expected = extract_sha256(_fetch_text(sha256_url, timeout=timeout))
             except NETWORK_ERRORS:
@@ -144,6 +151,17 @@ def check_running_app_integrity(
         "Version inconnue ou modifiée. L'empreinte locale ne correspond pas à celle publiée sur GitHub.",
         expected_sha256=expected,
         release_url=release_url,
+    )
+
+
+def _is_official_github_url(value: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(value)
+    except ValueError:
+        return False
+    host = (parsed.hostname or "").lower()
+    return parsed.scheme == "https" and (
+        host in {"github.com", "api.github.com"} or host.endswith(".githubusercontent.com")
     )
 
 
@@ -193,10 +211,14 @@ def _looks_like_frozen_app(executable: Path) -> bool:
 def signature_status(path: Path) -> str:
     if not sys.platform.startswith("win"):
         return "Non applicable"
+    system_root = os.environ.get("SystemRoot", "").strip()
+    powershell = Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+    if not system_root or not powershell.is_file():
+        return "Non vérifiée"
     try:
         completed = subprocess.run(
             [
-                "powershell",
+                str(powershell),
                 "-NoProfile",
                 "-Command",
                 "(Get-AuthenticodeSignature -LiteralPath $args[0]).Status",
@@ -206,6 +228,7 @@ def signature_status(path: Path) -> str:
             text=True,
             timeout=SIGNATURE_TIMEOUT_SECONDS,
             check=False,
+            cwd=str(powershell.parent),
         )
     except (OSError, subprocess.TimeoutExpired):
         return "Non vérifiée"

@@ -7,7 +7,6 @@ import webbrowser
 from tkinter import ttk
 
 from .audit_log import default_log_dir
-from .gui_state import summary_text
 from .gui_texts import LEGAL_NOTICE_TEXT, SECURITY_NOTICE_TEXT, SPONSOR_LINK_TEXT, SPONSOR_URL, SUPPORT_EMAIL, SUPPORT_ISSUE_URL, Text
 from .gui_theme import Palette
 from .integrity import IntegrityCheckResult, check_running_app_integrity, local_integrity_details
@@ -167,26 +166,21 @@ def _report_text(result: ConversionResult | None) -> str:
     if not result:
         return "Aucune validation n'a encore été lancée."
     lines = [
-        "Résumé",
-        "======",
-        summary_text(result),
+        "Résumé non confidentiel",
+        "=======================",
+        f"État : {'validé' if result.status == 'success' else 'à corriger'}",
         "",
         "Fichiers",
         "========",
-        f"Source : {result.source_path.name}",
-        f"MND : {result.output_path or 'non généré'}",
-        f"Rapport : {result.report_path or 'non généré'}",
-        f"JSON : {result.validation_json_path or 'non généré'}",
-        "",
-        "Empreintes",
-        "==========",
-        f"SHA256 source : {result.source_sha256 or 'n/d'}",
-        f"SHA256 MND : {result.mnd_sha256 or 'n/d'}",
+        "Source : sélectionnée",
+        f"MND : {'généré' if result.output_path else 'non généré'}",
+        f"Rapport : {'généré' if result.report_path else 'non généré'}",
+        f"JSON : {'généré' if result.validation_json_path else 'non généré'}",
         "",
         "Messages",
         "========",
     ]
-    lines.extend(f"- {message.message}" for message in result.messages)
+    lines.extend(f"- {message.severity} / {message.code}" for message in result.messages)
     if not result.messages:
         lines.append("- Aucun message bloquant.")
     return "\n".join(lines)

@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import sys
 import time
 import urllib.error
@@ -15,6 +16,7 @@ from typing import Any
 
 API_ROOT = "https://www.virustotal.com/api/v3"
 SMALL_FILE_LIMIT = 32 * 1024 * 1024
+MAX_PUBLIC_EXECUTABLE_BYTES = 256 * 1024 * 1024
 RETRYABLE_HTTP_STATUSES = {429, 500, 502, 503, 504}
 LOOKUP_ATTEMPTS = 3
 
@@ -23,7 +25,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Soumet l'exécutable public à VirusTotal et écrit un rapport Markdown.")
     parser.add_argument("--file", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--api-key", default="")
     parser.add_argument("--wait-minutes", type=int, default=10)
     parser.add_argument("--poll-seconds", type=int, default=20)
     parser.add_argument("--require-submit", action="store_true")
@@ -32,11 +33,17 @@ def main() -> int:
     parser.add_argument("--fail-on-detections", action="store_true", help="Échoue si VirusTotal retourne une détection malicious ou suspicious.")
     args = parser.parse_args()
 
+    try:
+        file_path = validate_public_executable(args.file)
+        file_content = read_public_executable(file_path)
+    except (FileNotFoundError, ValueError) as error:
+        print(f"VirusTotal: {error}", file=sys.stderr)
+        return 3
+
     if not args.no_dotenv:
         load_local_dotenv(Path(__file__).resolve().parents[1])
-    api_key = args.api_key or os.environ.get("VT_API_KEY", "") or os.environ.get("VIRUSTOTAL_API_KEY", "")
-    file_path = args.file
-    sha256 = sha256_file(file_path)
+    api_key = os.environ.get("VT_API_KEY", "") or os.environ.get("VIRUSTOTAL_API_KEY", "")
+    sha256 = hashlib.sha256(file_content).hexdigest()
 
     if not api_key:
         write_report(
@@ -54,9 +61,9 @@ def main() -> int:
         analysis: dict[str, Any] = {}
         already_present = False
         if not args.lookup_only:
-            upload_url = get_upload_url(api_key) if file_path.stat().st_size >= SMALL_FILE_LIMIT else f"{API_ROOT}/files"
+            upload_url = get_upload_url(api_key) if len(file_content) >= SMALL_FILE_LIMIT else f"{API_ROOT}/files"
             try:
-                upload_payload = post_file(upload_url, api_key, file_path)
+                upload_payload = post_file(upload_url, api_key, file_path.name, file_content)
                 analysis_id = upload_payload.get("data", {}).get("id", "")
                 analysis = poll_analysis(api_key, analysis_id, wait_minutes=args.wait_minutes, poll_seconds=args.poll_seconds) if analysis_id else {}
             except urllib.error.HTTPError as error:
@@ -80,8 +87,11 @@ def main() -> int:
     attributes = analysis.get("data", {}).get("attributes", {}) if isinstance(analysis, dict) else {}
     file_attributes = file_report.get("data", {}).get("attributes", {}) if isinstance(file_report, dict) else {}
     stats = attributes.get("stats") or file_attributes.get("last_analysis_stats", {})
+    stats = stats if isinstance(stats, dict) else {}
     detections = collect_detections(file_attributes.get("last_analysis_results", {}))
-    status = attributes.get("status") or ("rapport consulté" if args.lookup_only or already_present else "soumis")
+    analysis_completed = attributes.get("status") == "completed"
+    existing_completed = (args.lookup_only or already_present) and _has_complete_stats(stats)
+    status = "completed" if analysis_completed or existing_completed else str(attributes.get("status") or "incomplete")
     if args.lookup_only or already_present:
         message = "Rapport VirusTotal existant consulté."
     else:
@@ -90,20 +100,55 @@ def main() -> int:
         args.output,
         file_path=file_path,
         sha256=sha256,
-        submitted=True,
+        submitted=not args.lookup_only,
         status=status,
         message=message,
-        stats=stats if isinstance(stats, dict) else {},
+        stats=stats,
         detections=detections,
     )
-    if args.fail_on_detections and detections:
-        print(f"VirusTotal: {len(detections)} détection(s) à examiner.", file=sys.stderr)
+    if (args.require_submit or args.fail_on_detections) and (
+        args.lookup_only or not (analysis_completed or existing_completed) or not _has_complete_stats(stats)
+    ):
+        print("VirusTotal: analyse incomplète; la mise en ligne est bloquée.", file=sys.stderr)
+        return 5
+    detection_count = int(stats.get("malicious", 0)) + int(stats.get("suspicious", 0))
+    if args.fail_on_detections and (detections or detection_count):
+        print(f"VirusTotal: {max(len(detections), detection_count)} détection(s) à examiner.", file=sys.stderr)
         return 4
     print(
         "VirusTotal: "
         f"statut={status}; malicious={stats.get('malicious', 0)}; suspicious={stats.get('suspicious', 0)}"
     )
     return 0
+
+
+def validate_public_executable(file_path: Path, *, repo_root: Path | None = None) -> Path:
+    root = Path(repo_root or Path(__file__).resolve().parents[1]).resolve()
+    expected = root / "dist" / "CodaMND" / "CodaMND.exe"
+    candidate = Path(os.path.abspath(file_path))
+    if os.path.normcase(str(candidate)) != os.path.normcase(str(expected)):
+        raise ValueError("seul dist/CodaMND/CodaMND.exe peut être transmis.")
+    if not candidate.is_file():
+        raise FileNotFoundError("l'exécutable public dist/CodaMND/CodaMND.exe est introuvable.")
+    attributes = getattr(candidate.lstat(), "st_file_attributes", 0)
+    if candidate.is_symlink() or attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
+        raise ValueError("l'exécutable public ne peut pas être un lien ou un point de réanalyse.")
+    return candidate
+
+
+def read_public_executable(file_path: Path) -> bytes:
+    try:
+        with file_path.open("rb") as handle:
+            content = handle.read(MAX_PUBLIC_EXECUTABLE_BYTES + 1)
+    except OSError as error:
+        raise ValueError("l'exécutable public ne peut pas être lu.") from error
+    if len(content) > MAX_PUBLIC_EXECUTABLE_BYTES:
+        raise ValueError("l'exécutable public dépasse la taille maximale permise.")
+    return content
+
+
+def _has_complete_stats(stats: dict[str, Any]) -> bool:
+    return all(isinstance(stats.get(key), int) and not isinstance(stats.get(key), bool) for key in ("malicious", "suspicious"))
 
 
 def load_dotenv(path: Path) -> None:
@@ -133,13 +178,12 @@ def get_upload_url(api_key: str) -> str:
     return upload_url
 
 
-def post_file(url: str, api_key: str, file_path: Path) -> dict[str, Any]:
+def post_file(url: str, api_key: str, file_name: str, content: bytes) -> dict[str, Any]:
     boundary = f"----emg-{uuid.uuid4().hex}"
-    content = file_path.read_bytes()
     body = b"".join(
         [
             f"--{boundary}\r\n".encode("ascii"),
-            f'Content-Disposition: form-data; name="file"; filename="{file_path.name}"\r\n'.encode("utf-8"),
+            f'Content-Disposition: form-data; name="file"; filename="{file_name}"\r\n'.encode("utf-8"),
             b"Content-Type: application/octet-stream\r\n\r\n",
             content,
             f"\r\n--{boundary}--\r\n".encode("ascii"),

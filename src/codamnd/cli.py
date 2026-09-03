@@ -11,7 +11,7 @@ from .converter import convert_file, inspect_source, validate_file
 from .errors import ConfigurationError, ConversionError, FileOperationError, ValidationFailed
 from .integrity import check_running_app_integrity
 from .parser_mnd import parse_mnd_file
-from .parser_employeurd import parse_employeurd_file
+from .parser_employeurd import parse_employeurd_bytes, read_employeurd_bytes
 from .reports.gl_detail_pdf_parser import parse_gl_detail_pdf
 from .reconciliation import reconcile_gl_detail, reconciliation_failed
 from .update_check import check_for_update
@@ -89,7 +89,8 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_OK
 
         if args.command == "validate":
-            reconciliations = _collect_control_reconciliations(args, args.input, config)
+            source_bytes = read_employeurd_bytes(args.input)
+            reconciliations = _collect_control_reconciliations(args, args.input, config, source_bytes=source_bytes)
             result = validate_file(
                 args.input,
                 config,
@@ -98,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
                 validation_json_path=args.validation_json,
                 overwrite=args.overwrite,
                 reconciliations=reconciliations,
+                source_bytes=source_bytes,
             )
             _print_result(result.row_count, result.total_debit, result.total_credit, result.period, result.batch)
             if result.report_path:
@@ -108,8 +110,17 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_OK
 
         if args.command == "convert":
-            reconciliations = _collect_control_reconciliations(args, args.input, config)
-            result = convert_file(args.input, args.output, config, period=args.period, overwrite=args.overwrite, reconciliations=reconciliations)
+            source_bytes = read_employeurd_bytes(args.input)
+            reconciliations = _collect_control_reconciliations(args, args.input, config, source_bytes=source_bytes)
+            result = convert_file(
+                args.input,
+                args.output,
+                config,
+                period=args.period,
+                overwrite=args.overwrite,
+                reconciliations=reconciliations,
+                source_bytes=source_bytes,
+            )
             _print_result(result.row_count, result.total_debit, result.total_credit, result.period, result.batch)
             print(f"sortie={result.output_path}")
             print(f"rapport={result.report_path}")
@@ -209,20 +220,36 @@ def _run_self_tests() -> int:
     return EXIT_OK if result.wasSuccessful() else EXIT_VALIDATION
 
 
-def _handle_gl_detail_reconciliation(source_path: Path, report_path: Path, config, *, require: bool):
-    entries = parse_employeurd_file(source_path, reject_non_crlf=config.validation.reject_non_crlf_source)
+def _handle_gl_detail_reconciliation(
+    source_path: Path,
+    report_path: Path,
+    config,
+    *,
+    require: bool,
+    source_bytes: bytes | None = None,
+):
+    snapshot = source_bytes if source_bytes is not None else read_employeurd_bytes(source_path)
+    entries = parse_employeurd_bytes(snapshot, reject_non_crlf=config.validation.reject_non_crlf_source)
     validate_source_entries(entries, config.validation)
     result = reconcile_gl_detail(entries, report_path, config, required=require or None)
     _print_gl_detail_reconciliation(result)
     return result
 
 
-def _collect_control_reconciliations(args, source_path: Path, config) -> list:
+def _collect_control_reconciliations(args, source_path: Path, config, *, source_bytes: bytes) -> list:
     reconciliations = []
     gl_detail_path = getattr(args, "gl_detail", None)
     if gl_detail_path:
         require = bool(getattr(args, "require_gl_detail", False))
-        reconciliations.append(_handle_gl_detail_reconciliation(source_path, gl_detail_path, config, require=require))
+        reconciliations.append(
+            _handle_gl_detail_reconciliation(
+                source_path,
+                gl_detail_path,
+                config,
+                require=require,
+                source_bytes=source_bytes,
+            )
+        )
     return reconciliations
 
 

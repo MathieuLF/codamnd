@@ -13,6 +13,7 @@ FRIENDLY_MESSAGES = {
     "gl_detail_amount_mismatch": "Le PDF GL ne concorde pas avec les totaux du fichier EmployeurD.",
     "gl_detail_account_mismatch": "Un ou plusieurs comptes GL du PDF ne concordent pas avec le fichier EmployeurD.",
     "gl_detail_date_mismatch": "La date du PDF GL ne correspond pas à la date du fichier EmployeurD.",
+    "gl_detail_date_missing": "La date comptable du PDF GL est absente ou illisible.",
     "gl_detail_subtotal_mismatch": "Un sous-total du PDF GL ne concorde pas avec ses lignes.",
     "gl_detail_total_mismatch": "Le total du PDF GL ne concorde pas avec ses lignes.",
     "gl_detail_empty": "Le PDF GL ne contient aucune ligne lisible. Utilisez le PDF original généré par EmployeurD, non scanné ni altéré.",
@@ -28,8 +29,17 @@ def friendly_error_message(error: Exception) -> str:
 
 def technical_error_message(error: Exception) -> str:
     if isinstance(error, ValidationFailed):
-        return "\n".join(f"- {detail.format()}" for detail in error.errors)
-    return str(error)
+        return "\n".join(f"- {_safe_error_reference(detail)}" for detail in error.errors)
+    return f"- {type(error).__name__}: message local omis pour protéger les chemins et les données."
+
+
+def _safe_error_reference(detail: ErrorDetail) -> str:
+    parts = [detail.code]
+    if detail.line_number is not None:
+        parts.append(f"ligne {detail.line_number}")
+    if detail.field:
+        parts.append(detail.field)
+    return " / ".join(parts)
 
 
 def _friendly_detail(detail: ErrorDetail) -> str:

@@ -3,10 +3,12 @@ from __future__ import annotations
 import sys
 import tempfile
 import unittest
+import hashlib
 import json
 import os
 import subprocess
 import urllib.error
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -16,9 +18,10 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from codamnd.config import load_app_config
+from codamnd import cli
 from codamnd.converter import _write_text_atomic, convert_file
 from codamnd.audit_log import write_audit_event
-from codamnd.errors import FileOperationError, ValidationFailed
+from codamnd.errors import ErrorDetail, FileOperationError, ValidationFailed
 from codamnd.app_gui import (
     SECURITY_TOOLTIP_TEXT,
     _generated_outputs_message,
@@ -30,10 +33,11 @@ from codamnd.app_gui import (
     _validation_mode_text,
 )
 from codamnd.gui_controller import GuiController, GuiOperationResult
+from codamnd.gui_dialogs import _report_text
 from codamnd.gui_state import GuiViewState, build_file_preview, build_metrics, build_output_preview, default_output_root, summary_text
 from codamnd.integrity import IntegrityCheckResult, app_package_sha256, check_running_app_integrity, signature_status
 from codamnd.output_plan import build_output_plan
-from codamnd.parser_employeurd import parse_employeurd_file, parse_employeurd_line
+from codamnd.parser_employeurd import parse_employeurd_bytes, parse_employeurd_file, parse_employeurd_line
 from codamnd.parser_mnd import parse_mnd_file, parse_mnd_text
 from codamnd.preferences import (
     AppPreferences,
@@ -45,12 +49,13 @@ from codamnd.preferences import (
 )
 from codamnd.reconciliation import reconcile_control_report, reconcile_gl_detail, reconciliation_failed
 from codamnd.reports.gl_detail_pdf_parser import parse_gl_detail_pdf
-from codamnd.resource_paths import package_asset_path
+from codamnd.resource_paths import default_config_dir, package_asset_path
 from codamnd.update_check import DEFAULT_TIMEOUT_SECONDS, DEFAULT_UPDATE_URL, GITHUB_RELEASE_PAGE_BYTES, check_for_update
 from codamnd.validator import convert_account, mnd_totals, source_totals
 from codamnd.version import __version__
 from codamnd.writer_mnd import MND_LINE_LENGTH
-from scripts import agent_validate, append_release_verification, audit_release_readiness, generate_release_manifest, submit_virustotal
+from codamnd.user_messages import technical_error_message
+from scripts import agent_validate, append_release_verification, audit_release_readiness, generate_release_manifest, generate_sbom, submit_virustotal
 from scripts.submit_virustotal import collect_detections
 
 
@@ -67,6 +72,7 @@ def _write_synthetic_gl_detail_pdf(
     config,
     *,
     adjustments: dict[tuple[str, str], Decimal] | None = None,
+    include_date: bool = True,
 ) -> None:
     adjustments = adjustments or {}
     operators: list[str] = []
@@ -76,7 +82,8 @@ def _write_synthetic_gl_detail_pdf(
         operators.append(f"BT /F1 {size} Tf {x} {y} Td ({escaped}) Tj ET\n")
 
     text(50, 760, "Detail des imputations comptables", 14)
-    text(50, 738, "Date d'ecriture: 2026/06/18")
+    if include_date:
+        text(50, 738, "Date d'ecriture: 2026/06/18")
     text(50, 720, "Compagnie : 00291843")
     text(50, 702, "PC : 6")
     text(50, 684, "Periode de paie : 12")
@@ -244,6 +251,78 @@ class CodaMNDTest(unittest.TestCase):
             self.assertFalse(output.with_suffix(".rapport.md").exists())
             self.assertFalse(output.with_suffix(".validation.json").exists())
 
+    def test_conversion_uses_one_immutable_source_snapshot(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        original = (root / "samples" / "employeurd-balanced.txt").read_bytes()
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.txt"
+            output = Path(directory) / "output.mnd"
+            source.write_bytes(original)
+            snapshot = source.read_bytes()
+            source.write_bytes(b"contenu remplace")
+
+            result = convert_file(source, output, self.config(), source_bytes=snapshot)
+
+        self.assertEqual(result.source_sha256, hashlib.sha256(original).hexdigest())
+        self.assertEqual(result.row_count, BALANCED_ROW_COUNT)
+
+    def test_text_parsers_reject_oversized_inputs_before_parsing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.txt"
+            mnd = Path(directory) / "source.mnd"
+            source.write_bytes(b"12345")
+            mnd.write_bytes(b"12345")
+            with patch("codamnd.parser_employeurd.MAX_SOURCE_BYTES", 4):
+                with self.assertRaises(ValidationFailed):
+                    parse_employeurd_file(source)
+            with patch("codamnd.parser_mnd.MAX_MND_BYTES", 4):
+                with self.assertRaises(ValidationFailed):
+                    parse_mnd_file(mnd)
+
+    def test_source_parser_caps_validation_errors(self) -> None:
+        with self.assertRaises(ValidationFailed) as raised:
+            parse_employeurd_bytes(b"\n" * 500)
+
+        self.assertEqual(len(raised.exception.errors), 101)
+        self.assertEqual(raised.exception.errors[-1].code, "source_too_many_errors")
+
+    def test_cli_validate_and_convert_share_one_source_snapshot(self) -> None:
+        snapshot = b"immutable source snapshot"
+        result = SimpleNamespace(
+            row_count=1,
+            total_debit=Decimal("1.00"),
+            total_credit=Decimal("1.00"),
+            period="202609",
+            batch="00000001",
+            report_path=None,
+            validation_json_path=None,
+            output_path=Path("output.mnd"),
+        )
+        for command, arguments, target in (
+            ("validate", ["validate", "source.txt"], "validate_file"),
+            ("convert", ["convert", "source.txt", "output.mnd"], "convert_file"),
+        ):
+            with self.subTest(command=command):
+                with (
+                    patch("codamnd.cli.load_app_config", return_value=SimpleNamespace(audit_log={})),
+                    patch("codamnd.cli.read_employeurd_bytes", return_value=snapshot),
+                    patch("codamnd.cli._collect_control_reconciliations", return_value=[]) as collect,
+                    patch(f"codamnd.cli.{target}", return_value=result) as operation,
+                ):
+                    exit_code = cli.main(arguments)
+
+                self.assertEqual(exit_code, cli.EXIT_OK)
+                self.assertIs(collect.call_args.kwargs["source_bytes"], snapshot)
+                self.assertIs(operation.call_args.kwargs["source_bytes"], snapshot)
+
+    def test_pdf_parser_rejects_oversized_input_before_pdfplumber(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.pdf"
+            report.write_bytes(b"12345")
+            with patch("codamnd.reports.gl_detail_pdf_parser.MAX_PDF_BYTES", 4):
+                with self.assertRaises(ValidationFailed):
+                    parse_gl_detail_pdf(report)
+
     def test_atomic_writer_cleans_staged_file_after_replace_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "sortie.mnd"
@@ -280,6 +359,25 @@ class CodaMNDTest(unittest.TestCase):
             _generated_outputs_message(GuiOperationResult(ok=True, message="", conversion=all_outputs)),
             "Le fichier MND, le rapport Markdown et le JSON de validation ont été générés.",
         )
+
+    def test_support_diagnostics_and_copied_summary_omit_sensitive_details(self) -> None:
+        marker = r"C:\Users\Personne\Paie\secret-98765.txt"
+        diagnostic = technical_error_message(
+            ValidationFailed([ErrorDetail("source_private", f"Chemin: {marker}; total: 6643.00", 7, "amount")])
+        )
+        self.assertEqual(diagnostic, "- source_private / ligne 7 / amount")
+        self.assertNotIn(marker, diagnostic)
+
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "nominatif" / "output.mnd"
+            result = convert_file(root / "samples" / "employeurd-balanced.txt", output, self.config())
+            copied = _report_text(result)
+
+        self.assertNotIn(str(output), copied)
+        self.assertNotIn(result.source_sha256 or "", copied)
+        self.assertNotIn("6643", copied)
+        self.assertNotIn("00001234", copied)
 
     def test_gui_journal_summary_block_shows_totals_and_outputs(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -420,6 +518,18 @@ class CodaMNDTest(unittest.TestCase):
         self.assertEqual(reconciliation.report_debit, BALANCED_TOTAL)
         self.assertEqual(reconciliation.report_credit, BALANCED_TOTAL)
         self.assertEqual(reconciliation.details["account_mismatch_count"], "0")
+
+    def test_reconcile_gl_detail_rejects_missing_required_date(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        config = self.config()
+        entries = parse_employeurd_file(root / "samples" / "employeurd-balanced.txt")
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "GL_DETAIL_SYNTHETIQUE.pdf"
+            _write_synthetic_gl_detail_pdf(report_path, entries, config, include_date=False)
+            reconciliation = reconcile_gl_detail(entries, report_path, config, required=True)
+
+        self.assertEqual(reconciliation.status, "failed")
+        self.assertIn("gl_detail_date_missing", [message.code for message in reconciliation.messages])
 
     def test_reconcile_gl_detail_detects_account_mismatch(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -793,7 +903,7 @@ class CodaMNDTest(unittest.TestCase):
                 "assets": [
                     {
                         "name": "CodaMND-v0.1.0.package.sha256",
-                        "browser_download_url": "https://example.invalid/app.package.sha256",
+                        "browser_download_url": "https://github.com/MathieuLF/codamnd/releases/download/v0.1.0/CodaMND-v0.1.0.package.sha256",
                     }
                 ],
             }
@@ -804,7 +914,55 @@ class CodaMNDTest(unittest.TestCase):
         self.assertTrue(result.verified)
         self.assertEqual(result.expected_sha256, expected_hash)
         self.assertTrue(result.release_url.endswith("/releases/tags/v0.1.0"))
+        self.assertEqual(
+            fetch_json.call_args.args[0],
+            "https://api.github.com/repos/MathieuLF/codamnd/releases/tags/v0.1.0",
+        )
         self.assertEqual(fetch_json.call_args.kwargs["timeout"], DEFAULT_TIMEOUT_SECONDS)
+
+    def test_integrity_check_ignores_configured_custom_authority(self) -> None:
+        local = IntegrityCheckResult(
+            status="local",
+            current_version="0.2.0",
+            executable_path=Path("CodaMND.exe"),
+            local_sha256="a" * 64,
+            expected_sha256=None,
+            signature_status="NotSigned",
+            release_url=None,
+            message="local",
+        )
+        with (
+            patch("codamnd.integrity.local_integrity_details", return_value=local),
+            patch("codamnd.integrity._fetch_json", return_value={"package_sha256": "a" * 64}) as fetch_json,
+        ):
+            result = check_running_app_integrity(
+                "http://attacker.invalid/releases/latest",
+                current_version="0.2.0",
+                frozen=True,
+            )
+
+        self.assertTrue(result.verified)
+        self.assertEqual(
+            fetch_json.call_args.args[0],
+            "https://api.github.com/repos/MathieuLF/codamnd/releases/tags/v0.2.0",
+        )
+
+    def test_frozen_application_ignores_working_directory_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_dir = root / "portable"
+            cwd_dir = root / "launcher"
+            (app_dir / "config").mkdir(parents=True)
+            (cwd_dir / "config").mkdir(parents=True)
+            expected = (app_dir / "config").resolve()
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "executable", str(app_dir / "CodaMND.exe")),
+                patch("codamnd.resource_paths.Path.cwd", return_value=cwd_dir),
+            ):
+                resolved = default_config_dir()
+
+        self.assertEqual(resolved, expected)
 
     def test_windows_signature_status_passes_path_as_powershell_argument(self) -> None:
         malicious_paths = (
@@ -812,21 +970,27 @@ class CodaMNDTest(unittest.TestCase):
             Path("C:/Users/Public/ED'$(Start-Process calc)/CodaMND.exe"),
         )
 
-        for malicious_path in malicious_paths:
-            with self.subTest(path=str(malicious_path)):
-                with (
-                    patch("codamnd.integrity.sys.platform", "win32"),
-                    patch("codamnd.integrity.subprocess.run") as run,
-                ):
-                    run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="Valid\n", stderr="")
+        with tempfile.TemporaryDirectory() as directory:
+            powershell = Path(directory) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+            powershell.parent.mkdir(parents=True)
+            powershell.write_bytes(b"synthetic")
+            for malicious_path in malicious_paths:
+                with self.subTest(path=str(malicious_path)):
+                    with (
+                        patch("codamnd.integrity.sys.platform", "win32"),
+                        patch.dict(os.environ, {"SystemRoot": directory}),
+                        patch("codamnd.integrity.subprocess.run") as run,
+                    ):
+                        run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="Valid\n", stderr="")
 
-                    result = signature_status(malicious_path)
+                        result = signature_status(malicious_path)
 
-                command = run.call_args.args[0]
-                self.assertEqual(result, "Valid")
-                self.assertEqual(command[-1], str(malicious_path))
-                self.assertNotIn(str(malicious_path), command[3])
-                self.assertIn("$args[0]", command[3])
+                    command = run.call_args.args[0]
+                    self.assertEqual(result, "Valid")
+                    self.assertEqual(command[0], str(powershell))
+                    self.assertEqual(command[-1], str(malicious_path))
+                    self.assertNotIn(str(malicious_path), command[3])
+                    self.assertIn("$args[0]", command[3])
 
     def test_package_integrity_hash_changes_when_package_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -989,6 +1153,30 @@ class CodaMNDTest(unittest.TestCase):
             ],
         )
 
+    def test_public_screenshots_require_reviewed_hashes(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        self.assertEqual(audit_release_readiness._public_screenshot_issues(root), [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            private_root = Path(directory)
+            screenshot = private_root / "docs" / "assets" / "screenshots" / "new.png"
+            screenshot.parent.mkdir(parents=True)
+            screenshot.write_bytes(b"synthetic screenshot")
+            issues = audit_release_readiness._public_screenshot_issues(private_root)
+
+        self.assertTrue(any("non révisée" in issue for issue in issues))
+
+    def test_secret_audit_never_returns_secret_content(self) -> None:
+        marker = "synthetic-secret-value-1234567890"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "config.py").write_text(f"VT_API_KEY={marker}\n", encoding="utf-8")
+
+            result = audit_release_readiness._secret_issue_count(root)
+
+        self.assertEqual(result, 1)
+        self.assertIsInstance(result, int)
+
     def test_release_scripts_audit_and_extract_changelog(self) -> None:
         root = Path(__file__).resolve().parents[1]
         audit = subprocess.run(
@@ -1035,10 +1223,21 @@ class CodaMNDTest(unittest.TestCase):
             self.assertEqual(version_output.read_text(encoding="utf-8").strip(), "9.9.9")
             self.assertIn("Diff technique", notes_output.read_text(encoding="utf-8"))
 
+            invalid_prepare = subprocess.run(
+                [sys.executable, "scripts/prepare_release.py", "--version", "../9.9.9", "--dry-run"],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(invalid_prepare.returncode, 0)
+            self.assertIn("format majeur.mineur.correctif", invalid_prepare.stderr)
+
     def test_official_release_pipeline_is_manual_and_zip_first_without_paid_certificate(self) -> None:
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
         publish_script = (root / "scripts" / "publish_release.ps1").read_text(encoding="utf-8")
+        build_script = (root / "scripts" / "build_exe.ps1").read_text(encoding="utf-8")
         release_script = (root / "scripts" / "release.ps1").read_text(encoding="utf-8")
         readme = (root / "README.md").read_text(encoding="utf-8")
         security = (root / "SECURITY.md").read_text(encoding="utf-8")
@@ -1070,6 +1269,18 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("Assert-OfficialReleaseMainState", publish_script)
         self.assertIn('$Branch -ne "main"', publish_script)
         self.assertIn("refs/remotes/origin/main", publish_script)
+        early_guard = "if ($Push -or $CreateGitHubRelease) {\n    Assert-OfficialReleaseMainState\n}"
+        self.assertIn(early_guard, publish_script)
+        self.assertLess(publish_script.index(early_guard), publish_script.index("$VersionTemp = New-TemporaryFile"))
+        self.assertIn("if ($Push -or $CreateGitHubRelease) {\n    Assert-NoExistingReleaseTarget $Tag", publish_script)
+        self.assertIn("--require-hashes", release_script)
+        self.assertIn("requirements-release.txt", release_script)
+        self.assertIn("-Python $ReleasePython", release_script)
+        self.assertIn('ReleasePythonVersion.Trim() -ne "3.14"', release_script)
+        self.assertNotIn("VirusTotalApiKey", publish_script)
+        self.assertNotIn('"--api-key"', publish_script)
+        self.assertNotIn('[string]$Name', build_script)
+        self.assertIn("ValidatePattern('^\\d+\\.\\d+\\.\\d+$')", build_script)
         self.assertIn("Aucun ZIP portable disponible pour cette version.", site_js)
         self.assertIn("CodaMND|EmployeurD-MegaGest", site_js)
         self.assertIn("-portable\\.zip", site_js)
@@ -1099,12 +1310,37 @@ class CodaMNDTest(unittest.TestCase):
             self.assertIn("signée numériquement", document)
 
     def test_runtime_and_build_dependency_floors_are_current_for_release(self) -> None:
-        pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
+        release_lock = (root / "requirements-release.txt").read_text(encoding="utf-8")
 
         self.assertIn('pdfplumber>=0.11.10,<0.12', pyproject)
         self.assertIn('cx_Freeze==8.6.4', pyproject)
         self.assertIn('freeze-core==0.6.1', pyproject)
-        self.assertIn('setuptools>=84.0.0', pyproject)
+        self.assertIn('setuptools==82.0.1', pyproject)
+        self.assertIn("pdfplumber==0.11.10", release_lock)
+        self.assertIn("cx-freeze==8.6.4", release_lock)
+        locked_names = generate_sbom._locked_package_names(root / "requirements-release.txt")
+        self.assertIn("pdfplumber", locked_names)
+        self.assertIn("pypdfium2", locked_names)
+
+    def test_sbom_rejects_missing_or_drifted_locked_dependencies(self) -> None:
+        for installed_version in (None, "9.9.9"):
+            with self.subTest(installed_version=installed_version), tempfile.TemporaryDirectory() as directory:
+                workdir = Path(directory)
+                (workdir / "requirements-release.txt").write_text("example-package==1.2.3\n", encoding="utf-8")
+                previous_cwd = Path.cwd()
+                os.chdir(workdir)
+                try:
+                    effect = generate_sbom.metadata.PackageNotFoundError("example-package") if installed_version is None else installed_version
+                    with (
+                        patch.object(sys, "argv", ["generate_sbom.py", "--version", __version__]),
+                        patch("scripts.generate_sbom.metadata.version", side_effect=[effect]),
+                        self.assertRaises(SystemExit),
+                    ):
+                        generate_sbom.main()
+                finally:
+                    os.chdir(previous_cwd)
 
     def test_github_sponsor_link_is_exposed_in_app_and_public_docs(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1249,34 +1485,63 @@ class CodaMNDTest(unittest.TestCase):
         self.assertTrue(any("scripts/publish_release.ps1 ne doit pas publier de .exe direct" in item for item in issues))
 
     def test_virustotal_script_writes_local_report_without_api_key(self) -> None:
-        root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "CodaMND.exe"
             executable.write_bytes(b"synthetic executable")
             report = Path(directory) / "virustotal.md"
-            env = dict(os.environ)
-            env.pop("VT_API_KEY", None)
-            env.pop("VIRUSTOTAL_API_KEY", None)
-            completed = subprocess.run(
-                [
-                    sys.executable,
-                    "scripts/submit_virustotal.py",
-                    "--file",
-                    str(executable),
-                    "--output",
-                    str(report),
-                    "--no-dotenv",
-                ],
-                cwd=root,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            argv = ["submit_virustotal.py", "--file", str(executable), "--output", str(report), "--no-dotenv"]
+            with (
+                patch.object(sys, "argv", argv),
+                patch("scripts.submit_virustotal.validate_public_executable", return_value=executable),
+                patch.dict(os.environ, {"VT_API_KEY": "", "VIRUSTOTAL_API_KEY": ""}),
+            ):
+                exit_code = submit_virustotal.main()
             report_text = report.read_text(encoding="utf-8")
 
-        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(exit_code, 0)
         self.assertIn("Soumis à VirusTotal : non", report_text)
+
+    def test_virustotal_rejects_every_non_release_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private_file = root / "paie.txt"
+            private_file.write_text("données synthétiques", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                submit_virustotal.validate_public_executable(private_file, repo_root=root)
+
+    def test_virustotal_blocks_queued_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "CodaMND.exe"
+            executable.write_bytes(b"synthetic executable")
+            report = Path(directory) / "virustotal.md"
+            argv = [
+                "submit_virustotal.py",
+                "--file",
+                str(executable),
+                "--output",
+                str(report),
+                "--require-submit",
+                "--fail-on-detections",
+                "--no-dotenv",
+            ]
+            with (
+                patch.object(sys, "argv", argv),
+                patch("scripts.submit_virustotal.validate_public_executable", return_value=executable),
+                patch.dict(os.environ, {"VT_API_KEY": "synthetic-key"}),
+                patch("scripts.submit_virustotal.post_file", return_value={"data": {"id": "analysis"}}),
+                patch(
+                    "scripts.submit_virustotal.poll_analysis",
+                    return_value={"data": {"attributes": {"status": "queued"}}},
+                ),
+                patch(
+                    "scripts.submit_virustotal.get_file_report",
+                    return_value={"data": {"attributes": {"last_analysis_stats": {"malicious": 0, "suspicious": 0}}}},
+                ),
+            ):
+                exit_code = submit_virustotal.main()
+
+        self.assertEqual(exit_code, 5)
 
     def test_virustotal_detection_collection_keeps_blocking_results(self) -> None:
         detections = collect_detections(
@@ -1300,14 +1565,14 @@ class CodaMNDTest(unittest.TestCase):
                 str(executable),
                 "--output",
                 str(report),
-                "--api-key",
-                "synthetic-key",
                 "--fail-on-detections",
                 "--no-dotenv",
             ]
             conflict = urllib.error.HTTPError("https://example.invalid/files", 409, "Conflict", {}, None)
             with (
                 patch.object(sys, "argv", argv),
+                patch("scripts.submit_virustotal.validate_public_executable", return_value=executable),
+                patch.dict(os.environ, {"VT_API_KEY": "synthetic-key"}),
                 patch("scripts.submit_virustotal.get_upload_url", return_value="https://example.invalid/files"),
                 patch("scripts.submit_virustotal.post_file", side_effect=conflict),
                 patch(
@@ -1334,6 +1599,44 @@ class CodaMNDTest(unittest.TestCase):
         self.assertEqual(open_json.call_count, 2)
         sleep.assert_called_once_with(2)
 
+    def test_virustotal_hash_and_upload_use_the_same_snapshot(self) -> None:
+        original = b"first immutable executable"
+        replacement = b"changed after snapshot"
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "CodaMND.exe"
+            executable.write_bytes(original)
+            report = Path(directory) / "virustotal.md"
+
+            def snapshot_then_replace(path: Path) -> bytes:
+                content = path.read_bytes()
+                path.write_bytes(replacement)
+                return content
+
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    ["submit_virustotal.py", "--file", str(executable), "--output", str(report), "--no-dotenv"],
+                ),
+                patch("scripts.submit_virustotal.validate_public_executable", return_value=executable),
+                patch("scripts.submit_virustotal.read_public_executable", side_effect=snapshot_then_replace),
+                patch.dict(os.environ, {"VT_API_KEY": "synthetic-key"}),
+                patch("scripts.submit_virustotal.post_file", return_value={"data": {"id": "analysis"}}) as post,
+                patch(
+                    "scripts.submit_virustotal.poll_analysis",
+                    return_value={"data": {"attributes": {"status": "completed", "stats": {"malicious": 0, "suspicious": 0}}}},
+                ),
+                patch(
+                    "scripts.submit_virustotal.get_file_report",
+                    return_value={"data": {"attributes": {"last_analysis_stats": {"malicious": 0, "suspicious": 0}}}},
+                ) as file_report,
+            ):
+                exit_code = submit_virustotal.main()
+
+        self.assertEqual(exit_code, 0)
+        post.assert_called_once_with(f"{submit_virustotal.API_ROOT}/files", "synthetic-key", "CodaMND.exe", original)
+        file_report.assert_called_once_with("synthetic-key", hashlib.sha256(original).hexdigest())
+
     def test_virustotal_file_report_only_ignores_not_found(self) -> None:
         rate_limited = urllib.error.HTTPError("https://example.invalid/report", 429, "Rate limited", {}, None)
         with patch("scripts.submit_virustotal.vt_request", side_effect=rate_limited):
@@ -1350,7 +1653,8 @@ class CodaMNDTest(unittest.TestCase):
             executable = app / "CodaMND.exe"
             portable = dist / "CodaMND-v9.9.9-portable.zip"
             executable.write_bytes(b"synthetic executable")
-            portable.write_bytes(b"synthetic portable zip")
+            with zipfile.ZipFile(portable, "w") as archive:
+                archive.writestr("CodaMND/CodaMND.exe", executable.read_bytes())
             exe_sha = generate_release_manifest.sha256_file(executable)
             zip_sha = generate_release_manifest.sha256_file(portable)
             (dist / "CodaMND-v9.9.9-portable.exe.sha256").write_text(
@@ -1370,11 +1674,12 @@ class CodaMNDTest(unittest.TestCase):
                 "\n".join(
                     [
                         "# Rapport VirusTotal",
+                        f"- SHA256 : `{exe_sha}`",
                         "- Soumis à VirusTotal : oui",
-                        "- Statut : terminé",
+                        "- Statut : completed",
                         "- malicious : 0",
                         "- suspicious : 0",
-                        "- Lien : https://www.virustotal.com/gui/file/synthetic",
+                        f"- Lien : https://www.virustotal.com/gui/file/{exe_sha}",
                     ]
                 )
                 + "\n",
@@ -1416,7 +1721,8 @@ class CodaMNDTest(unittest.TestCase):
             executable = app / "CodaMND.exe"
             portable = dist / "CodaMND-v9.9.9-portable.zip"
             executable.write_bytes(b"synthetic executable")
-            portable.write_bytes(b"synthetic portable zip")
+            with zipfile.ZipFile(portable, "w") as archive:
+                archive.writestr("CodaMND/CodaMND.exe", executable.read_bytes())
             exe_sha = generate_release_manifest.sha256_file(executable)
             zip_sha = generate_release_manifest.sha256_file(portable)
             (dist / "CodaMND-v9.9.9-portable.exe.sha256").write_text(f"{exe_sha}\n", encoding="ascii")
@@ -1443,6 +1749,57 @@ class CodaMNDTest(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 1)
         self.assertIn("VirusTotal", completed.stdout)
+
+    def test_release_manifest_rejects_zip_with_different_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            dist = workdir / "dist"
+            app = dist / "CodaMND"
+            app.mkdir(parents=True)
+            executable = app / "CodaMND.exe"
+            portable = dist / "CodaMND-v9.9.9-portable.zip"
+            executable.write_bytes(b"controlled executable")
+            with zipfile.ZipFile(portable, "w") as archive:
+                archive.writestr("CodaMND/CodaMND.exe", b"different executable")
+            exe_sha = generate_release_manifest.sha256_file(executable)
+            zip_sha = generate_release_manifest.sha256_file(portable)
+            (dist / "CodaMND-v9.9.9-portable.exe.sha256").write_text(f"{exe_sha}\n", encoding="ascii")
+            (dist / "CodaMND-v9.9.9-portable.zip.sha256").write_text(f"{zip_sha}\n", encoding="ascii")
+            (dist / "CodaMND-v9.9.9.package.sha256").write_text(f"{'a' * 64}\n", encoding="ascii")
+
+            completed = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve().parents[1] / "scripts" / "generate_release_manifest.py"), "--version", "9.9.9"],
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn("contenu dans le ZIP", completed.stdout)
+
+    def test_release_manifest_requires_complete_bound_virustotal_receipt(self) -> None:
+        sha256 = "a" * 64
+        valid = {
+            "submitted": True,
+            "status": "completed",
+            "malicious": 0,
+            "suspicious": 0,
+            "sha256": sha256,
+            "link": f"https://www.virustotal.com/gui/file/{sha256}",
+        }
+        self.assertTrue(generate_release_manifest.is_clean_virustotal_report(valid, sha256))
+        for key, invalid_value in (
+            ("submitted", False),
+            ("status", "queued"),
+            ("malicious", None),
+            ("suspicious", 1),
+            ("sha256", "b" * 64),
+            ("link", "https://example.invalid/report"),
+        ):
+            with self.subTest(key=key):
+                invalid = {**valid, key: invalid_value}
+                self.assertFalse(generate_release_manifest.is_clean_virustotal_report(invalid, sha256))
 
     def test_release_manifest_detects_unsigned_pe_without_powershell(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

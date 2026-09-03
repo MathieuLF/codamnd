@@ -10,36 +10,68 @@ from .models import EmployeurDEntry
 
 
 SOURCE_LINE_LENGTH = 77
+MAX_SOURCE_BYTES = 10 * 1024 * 1024
+MAX_SOURCE_LINES = 100_000
+MAX_VALIDATION_ERRORS = 100
 AMOUNT_PATTERN = re.compile(r"^-?\d+(?:\.\d{1,2})?$")
 CENT = Decimal("0.01")
 
 
 def parse_employeurd_file(path: Path, *, reject_non_crlf: bool = False, encoding: str = "ascii") -> list[EmployeurDEntry]:
+    return parse_employeurd_bytes(
+        read_employeurd_bytes(path),
+        reject_non_crlf=reject_non_crlf,
+        encoding=encoding,
+    )
+
+
+def read_employeurd_bytes(path: Path) -> bytes:
     try:
-        content = path.read_bytes()
+        with path.open("rb") as handle:
+            content = handle.read(MAX_SOURCE_BYTES + 1)
+        if len(content) > MAX_SOURCE_BYTES:
+            raise ValidationFailed(f"Le fichier source dépasse la limite de {MAX_SOURCE_BYTES // (1024 * 1024)} Mo.")
     except OSError as error:
         raise FileOperationError(f"Impossible de lire le fichier source: {path}") from error
+    return content
+
+
+def parse_employeurd_bytes(
+    content: bytes,
+    *,
+    reject_non_crlf: bool = False,
+    encoding: str = "ascii",
+) -> list[EmployeurDEntry]:
 
     if not content:
         raise ValidationFailed("Le fichier source est vide.")
 
-    raw_lines = _split_lines(content, reject_non_crlf=reject_non_crlf)
+    raw_lines = _split_lines(content, reject_non_crlf=reject_non_crlf, max_lines=MAX_SOURCE_LINES)
     entries: list[EmployeurDEntry] = []
     errors: list[ErrorDetail] = []
 
     for line_number, raw_line in enumerate(raw_lines, start=1):
         if raw_line == b"":
             errors.append(ErrorDetail("source_empty_line", "Ligne vide interdite.", line_number))
-            continue
-        try:
-            line = raw_line.decode(encoding)
-        except UnicodeDecodeError:
-            errors.append(ErrorDetail("source_encoding", f"Ligne non décodable en {encoding}.", line_number))
-            continue
-        try:
-            entries.append(parse_employeurd_line(line, line_number))
-        except ValidationFailed as error:
-            errors.extend(error.errors)
+        else:
+            try:
+                line = raw_line.decode(encoding)
+            except UnicodeDecodeError:
+                errors.append(ErrorDetail("source_encoding", f"Ligne non décodable en {encoding}.", line_number))
+            else:
+                try:
+                    entries.append(parse_employeurd_line(line, line_number))
+                except ValidationFailed as error:
+                    errors.extend(error.errors)
+        if len(errors) >= MAX_VALIDATION_ERRORS:
+            errors = errors[:MAX_VALIDATION_ERRORS]
+            errors.append(
+                ErrorDetail(
+                    "source_too_many_errors",
+                    f"Validation interrompue après {MAX_VALIDATION_ERRORS} erreurs.",
+                )
+            )
+            break
 
     if errors:
         raise ValidationFailed(errors)
@@ -113,20 +145,25 @@ def parse_employeurd_line(line: str, line_number: int = 1) -> EmployeurDEntry:
     )
 
 
-def _split_lines(content: bytes, *, reject_non_crlf: bool) -> list[bytes]:
+def _split_lines(content: bytes, *, reject_non_crlf: bool, max_lines: int) -> list[bytes]:
     if reject_non_crlf:
         normalized = content.replace(b"\r\n", b"")
         if b"\r" in normalized or b"\n" in normalized:
             raise ValidationFailed("Les fins de ligne source doivent être CRLF en mode strict.")
 
     if b"\r\n" in content:
-        lines = content.split(b"\r\n")
+        separator = b"\r\n"
     elif b"\n" in content:
-        lines = content.split(b"\n")
+        separator = b"\n"
     elif b"\r" in content:
-        lines = content.split(b"\r")
+        separator = b"\r"
     else:
-        lines = [content]
+        separator = None
+    line_count = content.count(separator) + (0 if content.endswith(separator) else 1) if separator else 1
+    if line_count > max_lines:
+        raise ValidationFailed(f"Le fichier source dépasse la limite de {max_lines} lignes.")
+
+    lines = content.split(separator) if separator else [content]
 
     if lines and lines[-1] == b"":
         lines = lines[:-1]

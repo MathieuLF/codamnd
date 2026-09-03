@@ -80,14 +80,23 @@ def reconcile_gl_detail(
                 f"{len(account_mismatches)} compte(s) GL ne concordent pas avec le PDF.",
             )
         )
-    if gl_config.require_matching_date and source_dates and report_dates and source_dates != report_dates:
-        messages.append(
-            ValidationMessage(
-                "error" if is_required else "warning",
-                "gl_detail_date_mismatch",
-                "La date du PDF GL ne concorde pas avec l'écriture.",
+    if gl_config.require_matching_date:
+        if not report_dates:
+            messages.append(
+                ValidationMessage(
+                    "error" if is_required else "warning",
+                    "gl_detail_date_missing",
+                    "La date comptable du PDF GL est absente ou illisible.",
+                )
             )
-        )
+        elif source_dates and source_dates != report_dates:
+            messages.append(
+                ValidationMessage(
+                    "error" if is_required else "warning",
+                    "gl_detail_date_mismatch",
+                    "La date du PDF GL ne concorde pas avec l'écriture.",
+                )
+            )
 
     details = {
         "company": report.company or "n/d",

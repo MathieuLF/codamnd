@@ -4,6 +4,12 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+- Renforce la confidentialité des diagnostics et des résumés copiés depuis l'application.
+- Traite chaque fichier à partir d'une copie stable en mémoire et borne la lecture des fichiers anormalement volumineux.
+- Durcit la vérification des mises à jour, de la signature Windows et des rapports VirusTotal.
+- Verrouille les dépendances de publication, les actions GitHub et l'inventaire logiciel du paquet portable.
+- Ajoute des garde-fous de publication pour la branche principale, les versions et les captures publiques.
+
 ## [0.2.0] - 2026-09-02
 
 - Renomme le projet, le logiciel et le microsite en CodaMND.

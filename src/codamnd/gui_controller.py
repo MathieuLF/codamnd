@@ -9,7 +9,7 @@ from .errors import ValidationFailed
 from .models import ConversionResult, ReconciliationResult
 from .audit_log import write_audit_event
 from .output_plan import OutputPlan, build_output_plan
-from .parser_employeurd import parse_employeurd_file
+from .parser_employeurd import parse_employeurd_bytes, read_employeurd_bytes
 from .reconciliation import reconcile_control_report, reconciliation_failed
 from .resource_paths import default_config_dir
 from .validator import validate_source_entries
@@ -37,11 +37,12 @@ class GuiController:
         require_control_report: bool,
     ) -> GuiOperationResult:
         config = load_app_config(self.config_dir)
-        entries = parse_employeurd_file(source_path, reject_non_crlf=config.validation.reject_non_crlf_source)
+        source_bytes = read_employeurd_bytes(source_path)
+        entries = parse_employeurd_bytes(source_bytes, reject_non_crlf=config.validation.reject_non_crlf_source)
         validate_source_entries(entries, config.validation)
         reconciliations = _build_reconciliations(entries, control_report_path, config, require_control_report)
         _raise_if_required_reconciliation_failed(reconciliations)
-        result = validate_file(source_path, config, reconciliations=reconciliations)
+        result = validate_file(source_path, config, reconciliations=reconciliations, source_bytes=source_bytes)
         operation = GuiOperationResult(
             ok=True,
             message=f"Validation réussie - {result.row_count} lignes - débit {result.total_debit:.2f} / crédit {result.total_credit:.2f}",
@@ -63,7 +64,8 @@ class GuiController:
         write_validation_json: bool,
     ) -> GuiOperationResult:
         config = load_app_config(self.config_dir)
-        entries = parse_employeurd_file(source_path, reject_non_crlf=config.validation.reject_non_crlf_source)
+        source_bytes = read_employeurd_bytes(source_path)
+        entries = parse_employeurd_bytes(source_bytes, reject_non_crlf=config.validation.reject_non_crlf_source)
         validate_source_entries(entries, config.validation)
         reconciliations = _build_reconciliations(entries, control_report_path, config, require_control_report)
         _raise_if_required_reconciliation_failed(reconciliations)
@@ -85,6 +87,7 @@ class GuiController:
             write_report=write_report,
             write_validation_json=write_validation_json,
             reconciliations=reconciliations,
+            source_bytes=source_bytes,
         )
         operation = GuiOperationResult(
             ok=True,

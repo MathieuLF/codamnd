@@ -10,7 +10,7 @@ from pathlib import Path
 from .config import AppConfig
 from .errors import ErrorDetail, FileOperationError, ValidationFailed
 from .models import ConversionResult, EmployeurDEntry, MndEntry, ReconciliationResult, ValidationMessage
-from .parser_employeurd import parse_employeurd_file
+from .parser_employeurd import parse_employeurd_bytes, read_employeurd_bytes
 from .parser_mnd import parse_mnd_text
 from .report_markdown import build_markdown_report, default_report_path
 from .validation_json import build_validation_json, default_validation_json_path
@@ -38,8 +38,9 @@ class ConversionDraft:
 
 
 def inspect_source(path: Path, config: AppConfig) -> ConversionResult:
-    source_hash = _sha256_file(path)
-    entries = parse_employeurd_file(path, reject_non_crlf=config.validation.reject_non_crlf_source)
+    source_bytes = read_employeurd_bytes(path)
+    source_hash = hashlib.sha256(source_bytes).hexdigest()
+    entries = parse_employeurd_bytes(source_bytes, reject_non_crlf=config.validation.reject_non_crlf_source)
     validate_source_entries(entries, config.validation)
     debit, credit = source_totals(entries)
     account_count, debit_account_count, credit_account_count = _source_account_counts(entries)
@@ -65,9 +66,16 @@ def inspect_source(path: Path, config: AppConfig) -> ConversionResult:
     )
 
 
-def build_conversion_draft(source_path: Path, config: AppConfig, *, period: str | None = None) -> ConversionDraft:
-    source_hash = _sha256_file(source_path)
-    source_entries = parse_employeurd_file(source_path, reject_non_crlf=config.validation.reject_non_crlf_source)
+def build_conversion_draft(
+    source_path: Path,
+    config: AppConfig,
+    *,
+    period: str | None = None,
+    source_bytes: bytes | None = None,
+) -> ConversionDraft:
+    snapshot = source_bytes if source_bytes is not None else read_employeurd_bytes(source_path)
+    source_hash = hashlib.sha256(snapshot).hexdigest()
+    source_entries = parse_employeurd_bytes(snapshot, reject_non_crlf=config.validation.reject_non_crlf_source)
     validate_source_entries(source_entries, config.validation)
     mnd_entries = convert_to_mnd_entries(
         source_entries,
@@ -100,6 +108,7 @@ def validate_file(
     validation_json_path: Path | None = None,
     overwrite: bool = False,
     reconciliations: list[ReconciliationResult] | None = None,
+    source_bytes: bytes | None = None,
 ) -> ConversionResult:
     reconciliations = reconciliations or []
     reconciliation_errors = _reconciliation_error_details(reconciliations)
@@ -108,7 +117,7 @@ def validate_file(
         _write_artifacts(result, overwrite=overwrite)
         raise ValidationFailed(reconciliation_errors)
     try:
-        draft = build_conversion_draft(source_path, config, period=period)
+        draft = build_conversion_draft(source_path, config, period=period, source_bytes=source_bytes)
     except ValidationFailed as error:
         result = _failed_result(source_path, None, report_path, validation_json_path, error.errors, reconciliations)
         _write_artifacts(result, overwrite=overwrite)
@@ -160,6 +169,7 @@ def convert_file(
     write_report: bool = True,
     write_validation_json: bool = True,
     reconciliations: list[ReconciliationResult] | None = None,
+    source_bytes: bytes | None = None,
 ) -> ConversionResult:
     reconciliations = reconciliations or []
     report_path = (report_path or default_report_path(output_path)) if write_report else None
@@ -172,7 +182,7 @@ def convert_file(
     _assert_output_available(output_path, overwrite=overwrite)
 
     try:
-        draft = build_conversion_draft(source_path, config, period=period)
+        draft = build_conversion_draft(source_path, config, period=period, source_bytes=source_bytes)
     except ValidationFailed as error:
         result = _failed_result(source_path, output_path, report_path, validation_json_path, error.errors, reconciliations)
         _write_artifacts(result, overwrite=True)

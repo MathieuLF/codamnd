@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from io import BytesIO
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
@@ -21,6 +22,12 @@ DATE_PATTERN = re.compile(r"Date d['’](?:é|e)criture\s*:\s*(\d{4})/(\d{2})/(\
 COMPANY_PATTERN = re.compile(r"Compagnie\s*:\s*(\d+)", re.IGNORECASE)
 PC_PATTERN = re.compile(r"\bPC\s*:\s*(\d+)", re.IGNORECASE)
 PAYROLL_PERIOD_PATTERN = re.compile(r"P(?:é|e)riode de paie\s*:\s*(\d+)", re.IGNORECASE)
+MAX_PDF_BYTES = 50 * 1024 * 1024
+MAX_PDF_PAGES = 250
+MAX_PDF_TEXT_CHARS = 5_000_000
+MAX_PDF_WORDS = 500_000
+MAX_GL_ENTRIES = 100_000
+MAX_VALIDATION_ERRORS = 100
 
 
 @dataclass(frozen=True)
@@ -83,6 +90,14 @@ class GLDetailPDFParser:
 
 def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
     try:
+        with path.open("rb") as handle:
+            pdf_bytes = handle.read(MAX_PDF_BYTES + 1)
+        if len(pdf_bytes) > MAX_PDF_BYTES:
+            raise ValidationFailed(f"Le rapport GL dépasse la limite de {MAX_PDF_BYTES // (1024 * 1024)} Mo.")
+    except OSError as error:
+        raise FileOperationError(f"Impossible de lire le rapport GL PDF: {path}") from error
+
+    try:
         import pdfplumber  # type: ignore[import-not-found]
     except ModuleNotFoundError as error:
         raise FileOperationError("Le module pdfplumber est requis pour lire le rapport GL PDF.") from error
@@ -102,13 +117,24 @@ def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
     debit_x: float | None = None
     credit_x: float | None = None
     metadata_text: list[str] = []
+    text_chars = 0
+    word_count = 0
 
     try:
-        with pdfplumber.open(path) as document:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as document:
+            if len(document.pages) > MAX_PDF_PAGES:
+                raise ValidationFailed(f"Le rapport GL dépasse la limite de {MAX_PDF_PAGES} pages.")
             for page_number, page in enumerate(document.pages, start=1):
+                page_character_count = len(page.chars)
+                if text_chars + page_character_count > MAX_PDF_TEXT_CHARS:
+                    raise ValidationFailed("Le rapport GL contient trop de texte pour être traité de façon sûre.")
                 page_text = page.extract_text(x_tolerance=1, y_tolerance=3) or ""
+                text_chars += page_character_count
                 metadata_text.append(page_text)
                 words = page.extract_words(x_tolerance=1, y_tolerance=3, keep_blank_chars=False)
+                word_count += len(words)
+                if word_count > MAX_PDF_WORDS:
+                    raise ValidationFailed("Le rapport GL contient trop de mots pour être traité de façon sûre.")
                 for line_number, line_words in enumerate(_group_words_by_line(words), start=1):
                     header = _header_columns(line_words)
                     if header:
@@ -129,9 +155,11 @@ def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
                                     page_number,
                                 )
                             )
+                            _raise_if_too_many_errors(errors)
                             continue
                         amount = _parse_decimal(amount_word["text"], errors, page_number, "amount")
                         if amount is None:
+                            _raise_if_too_many_errors(errors)
                             continue
                         side = _word_side(amount_word, debit_x, credit_x)
                         account = str(account_word["text"])
@@ -146,6 +174,8 @@ def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
                                 description=description,
                             )
                         )
+                        if len(entries) > MAX_GL_ENTRIES:
+                            raise ValidationFailed(f"Le rapport GL dépasse la limite de {MAX_GL_ENTRIES} écritures.")
                         account_side_totals[(account, side)] += amount
                         if side == "debit":
                             debit_total += amount
@@ -172,6 +202,7 @@ def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
                                     page_number,
                                 )
                             )
+                        _raise_if_too_many_errors(errors)
                         current_debit = ZERO
                         current_credit = ZERO
                         continue
@@ -249,6 +280,20 @@ def parse_gl_detail_pdf(path: Path) -> GLDetailReport:
         total_company_credit=total_company_credit,
         total_period_debit=total_period_debit,
         total_period_credit=total_period_credit,
+    )
+
+
+def _raise_if_too_many_errors(errors: list[ErrorDetail]) -> None:
+    if len(errors) < MAX_VALIDATION_ERRORS:
+        return
+    raise ValidationFailed(
+        [
+            *errors[:MAX_VALIDATION_ERRORS],
+            ErrorDetail(
+                "gl_detail_too_many_errors",
+                f"Validation interrompue après {MAX_VALIDATION_ERRORS} erreurs.",
+            ),
+        ]
     )
 
 

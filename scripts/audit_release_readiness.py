@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -88,6 +89,11 @@ BLOCKED_TRACKED_PATTERNS = (
     re.compile(r"\.(rapport\.md|validation\.json)$", re.IGNORECASE),
     re.compile(r"\.(security|virustotal)\.local\.md$", re.IGNORECASE),
 )
+PUBLIC_SCREENSHOT_SHA256 = {
+    "docs/assets/screenshots/v0.1.0/app-main.png": "a235bdb7947aab78f50fa4d7c37028691b0ffc87437a65be4e11f0118891f151",
+    "docs/assets/screenshots/v0.1.4/app-main.png": "3c3da75683ba96bb51a3aab1cd349b579f9ebe2613210fdc6dcb779e7e99733c",
+    "docs/assets/screenshots/v0.2.0/app-main.jpg": "179c00cadf645a18ffaddabddd2f2549799b06ca05b028453e748b4b410b5d4e",
+}
 
 
 def main() -> int:
@@ -101,16 +107,22 @@ def main() -> int:
 
     issues.extend(_version_issues(root, args.version))
     issues.extend(_release_policy_issues(root))
+    issues.extend(_workflow_action_issues(root))
     issues.extend(_gitignore_issues(root))
     issues.extend(_tracked_file_issues(root))
-    issues.extend(_secret_issues(root))
+    issues.extend(_public_screenshot_issues(root))
+    secret_issue_count = _secret_issue_count(root)
+    if secret_issue_count:
+        issues.append(f"{secret_issue_count} secret(s) potentiel(s) détecté(s); contenu volontairement omis.")
     if args.require_clean:
         issues.extend(_clean_tree_issues(root))
 
     if issues:
         print("Préparation de mise en ligne: problèmes à corriger", file=sys.stderr)
-        for issue in issues:
-            print(f"- {issue}", file=sys.stderr)
+        print(
+            f"- {len(issues)} contrôle(s) en échec; détails volontairement omis de la sortie publique.",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Préparation de mise en ligne OK pour v{args.version}")
@@ -208,6 +220,18 @@ def _release_policy_issues(root: Path) -> list[str]:
     if re.search(r"(?m)^\s*\"dist/\$Name-v\$ReleaseVersion\.exe\"\s*,?\s*$", publish_script):
         issues.append("scripts/publish_release.ps1 ne doit pas publier de .exe direct sans certificat.")
 
+    local_release_path = root / "scripts" / "release.ps1"
+    if not local_release_path.exists():
+        issues.append("scripts/release.ps1 est absent.")
+    else:
+        local_release = local_release_path.read_text(encoding="utf-8")
+        if "--require-hashes" not in local_release or "requirements-release.txt" not in local_release:
+            issues.append("scripts/release.ps1 doit installer le verrou de dépendances avec --require-hashes.")
+        if "-Python $ReleasePython" not in local_release:
+            issues.append("scripts/release.ps1 doit utiliser le même environnement verrouillé pour construire l'exécutable.")
+        if 'ReleasePythonVersion.Trim() -ne "3.14"' not in local_release:
+            issues.append("scripts/release.ps1 doit exiger Python 3.14 pour le verrou de publication Windows.")
+
     return issues
 
 
@@ -225,8 +249,21 @@ def _tracked_file_issues(root: Path) -> list[str]:
     return issues
 
 
-def _secret_issues(root: Path) -> list[str]:
+def _workflow_action_issues(root: Path) -> list[str]:
     issues: list[str] = []
+    workflows = root / ".github" / "workflows"
+    for path in sorted((*workflows.glob("*.yml"), *workflows.glob("*.yaml"))):
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            match = re.search(r"\buses:\s*[^\s@]+@([^\s#]+)", line)
+            if match and not re.fullmatch(r"[0-9a-f]{40}", match.group(1)):
+                issues.append(
+                    f"Action GitHub non épinglée à un commit: {path.relative_to(root)}:{line_number}"
+                )
+    return issues
+
+
+def _secret_issue_count(root: Path) -> int:
+    issue_count = 0
     for path in root.rglob("*"):
         if not path.is_file() or _is_ignored_for_scan(root, path):
             continue
@@ -236,9 +273,30 @@ def _secret_issues(root: Path) -> list[str]:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        for line_number, line in enumerate(text.splitlines(), start=1):
+        for line in text.splitlines():
             if any(pattern.search(line) for pattern in SECRET_PATTERNS):
-                issues.append(f"Secret potentiel: {path.relative_to(root)}:{line_number}")
+                issue_count += 1
+    return issue_count
+
+
+def _public_screenshot_issues(root: Path) -> list[str]:
+    screenshot_root = root / "docs" / "assets" / "screenshots"
+    actual_paths = {
+        path.relative_to(root).as_posix(): path
+        for path in screenshot_root.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    }
+    issues: list[str] = []
+    for relative, path in actual_paths.items():
+        expected = PUBLIC_SCREENSHOT_SHA256.get(relative)
+        if not expected:
+            issues.append(f"Capture publique non révisée: {relative}")
+            continue
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            issues.append(f"Capture publique modifiée sans nouvelle révision visuelle: {relative}")
+    for relative in sorted(set(PUBLIC_SCREENSHOT_SHA256) - set(actual_paths)):
+        issues.append(f"Capture publique approuvée mais manquante: {relative}")
     return issues
 
 

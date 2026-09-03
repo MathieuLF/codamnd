@@ -9,6 +9,7 @@ from pathlib import Path
 
 VERSION_RE = re.compile(r'__version__ = "([^"]+)"')
 PYPROJECT_VERSION_RE = re.compile(r'^version = "([^"]+)"$', re.MULTILINE)
+PUBLIC_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 def main() -> int:
@@ -26,6 +27,8 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     current_version = read_current_version(root)
     version = args.version.strip() or bump_version(current_version, args.bump)
+    if not PUBLIC_VERSION_RE.fullmatch(version):
+        raise SystemExit(f"Version non conforme au format majeur.mineur.correctif: {version}")
 
     changelog_path = root / "CHANGELOG.md"
     changelog = changelog_path.read_text(encoding="utf-8")
