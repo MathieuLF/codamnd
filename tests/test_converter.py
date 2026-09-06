@@ -964,33 +964,23 @@ class CodaMNDTest(unittest.TestCase):
 
         self.assertEqual(resolved, expected)
 
-    def test_windows_signature_status_passes_path_as_powershell_argument(self) -> None:
+    def test_windows_signature_status_passes_literal_path_to_native_api(self) -> None:
         malicious_paths = (
             Path(r"C:\Users\victim\bad'$(Write-Output PWNED)\CodaMND.exe"),
             Path("C:/Users/Public/ED'$(Start-Process calc)/CodaMND.exe"),
         )
 
-        with tempfile.TemporaryDirectory() as directory:
-            powershell = Path(directory) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-            powershell.parent.mkdir(parents=True)
-            powershell.write_bytes(b"synthetic")
-            for malicious_path in malicious_paths:
-                with self.subTest(path=str(malicious_path)):
-                    with (
-                        patch("codamnd.integrity.sys.platform", "win32"),
-                        patch.dict(os.environ, {"SystemRoot": directory}),
-                        patch("codamnd.integrity.subprocess.run") as run,
-                    ):
-                        run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="Valid\n", stderr="")
-
-                        result = signature_status(malicious_path)
-
-                    command = run.call_args.args[0]
-                    self.assertEqual(result, "Valid")
-                    self.assertEqual(command[0], str(powershell))
-                    self.assertEqual(command[-1], str(malicious_path))
-                    self.assertNotIn(str(malicious_path), command[3])
-                    self.assertIn("$args[0]", command[3])
+        for malicious_path in malicious_paths:
+            with self.subTest(path=str(malicious_path)):
+                with (
+                    patch("codamnd.integrity.sys.platform", "win32"),
+                    patch.object(Path, "is_file", return_value=True),
+                    patch("codamnd.integrity._winverifytrust", return_value=0) as verify,
+                    patch("subprocess.run", side_effect=AssertionError("No shell/process allowed")),
+                ):
+                    result = signature_status(malicious_path)
+                self.assertEqual(result, "Valid (cache local)")
+                verify.assert_called_once_with(malicious_path.resolve())
 
     def test_package_integrity_hash_changes_when_package_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
