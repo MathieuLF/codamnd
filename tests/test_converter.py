@@ -175,7 +175,7 @@ class CodaMNDTest(unittest.TestCase):
         self.assertTrue(package_asset_path("app-icon.png").exists())
         self.assertTrue((root / "packaging" / "windows" / "CodaMND.ico").exists())
         self.assertTrue((root / "docs" / "assets" / "product-icon.png").exists())
-        self.assertIn("--icon", (root / "scripts" / "build_exe.ps1").read_text(encoding="utf-8"))
+        self.assertIn('1 ICON', (root / "scripts" / "build_native.py").read_text(encoding="utf-8"))
 
     def test_source_totals_balance_with_decimal(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -964,33 +964,23 @@ class CodaMNDTest(unittest.TestCase):
 
         self.assertEqual(resolved, expected)
 
-    def test_windows_signature_status_passes_path_as_powershell_argument(self) -> None:
+    def test_windows_signature_status_passes_literal_path_to_native_api(self) -> None:
         malicious_paths = (
             Path(r"C:\Users\victim\bad'$(Write-Output PWNED)\CodaMND.exe"),
             Path("C:/Users/Public/ED'$(Start-Process calc)/CodaMND.exe"),
         )
 
-        with tempfile.TemporaryDirectory() as directory:
-            powershell = Path(directory) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-            powershell.parent.mkdir(parents=True)
-            powershell.write_bytes(b"synthetic")
-            for malicious_path in malicious_paths:
-                with self.subTest(path=str(malicious_path)):
-                    with (
-                        patch("codamnd.integrity.sys.platform", "win32"),
-                        patch.dict(os.environ, {"SystemRoot": directory}),
-                        patch("codamnd.integrity.subprocess.run") as run,
-                    ):
-                        run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout="Valid\n", stderr="")
-
-                        result = signature_status(malicious_path)
-
-                    command = run.call_args.args[0]
-                    self.assertEqual(result, "Valid")
-                    self.assertEqual(command[0], str(powershell))
-                    self.assertEqual(command[-1], str(malicious_path))
-                    self.assertNotIn(str(malicious_path), command[3])
-                    self.assertIn("$args[0]", command[3])
+        for malicious_path in malicious_paths:
+            with self.subTest(path=str(malicious_path)):
+                with (
+                    patch("codamnd.integrity.sys.platform", "win32"),
+                    patch.object(Path, "is_file", return_value=True),
+                    patch("codamnd.integrity._winverifytrust", return_value=0) as verify,
+                    patch("subprocess.run", side_effect=AssertionError("No shell/process allowed")),
+                ):
+                    result = signature_status(malicious_path)
+                self.assertEqual(result, "Valid (cache local)")
+                verify.assert_called_once_with(malicious_path.resolve())
 
     def test_package_integrity_hash_changes_when_package_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1249,11 +1239,11 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("Préparer une mise en ligne manuelle", workflow)
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("  push:\n", workflow)
-        self.assertIn('python-version: "3.14"', workflow)
+        self.assertIn('python-version: "3.14.7"', workflow)
         self.assertIn("INPUT_TAG_NAME: ${{ inputs.tag_name }}", workflow)
         self.assertIn('if ($tag -ne "v$version")', workflow)
         self.assertIn("group: codamnd-release", workflow)
-        self.assertIn("timeout-minutes: 20", workflow)
+        self.assertIn("timeout-minutes: 40", workflow)
         self.assertIn('$env:GITHUB_REF_NAME -ne "main"', workflow)
         self.assertIn("refs/remotes/origin/main", workflow)
         self.assertIn("$virusTotalExitCode = $LASTEXITCODE", workflow)
@@ -1315,11 +1305,14 @@ class CodaMNDTest(unittest.TestCase):
         release_lock = (root / "requirements-release.txt").read_text(encoding="utf-8")
 
         self.assertIn('pdfplumber>=0.11.10,<0.12', pyproject)
-        self.assertIn('cx_Freeze==8.6.4', pyproject)
-        self.assertIn('freeze-core==0.6.1', pyproject)
-        self.assertIn('setuptools==82.0.1', pyproject)
+        self.assertNotIn('cx_Freeze', pyproject)
+        self.assertNotIn('freeze-core', pyproject)
+        self.assertIn('packaging==26.3', pyproject)
+        self.assertIn('setuptools==83.0.0', pyproject)
+        self.assertIn('setuptools==83.0.0', release_lock)
+        self.assertIn('setuptools==83.0.0', (root / "requirements-release.in").read_text(encoding="utf-8"))
         self.assertIn("pdfplumber==0.11.10", release_lock)
-        self.assertIn("cx-freeze==8.6.4", release_lock)
+        self.assertNotIn("cx-freeze==", release_lock)
         locked_names = generate_sbom._locked_package_names(root / "requirements-release.txt")
         self.assertIn("pdfplumber", locked_names)
         self.assertIn("pypdfium2", locked_names)
@@ -1699,6 +1692,7 @@ class CodaMNDTest(unittest.TestCase):
                 text=True,
                 check=False,
             )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             manifest = json.loads((dist / "CodaMND-v9.9.9.release-manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(completed.returncode, 0, completed.stderr)

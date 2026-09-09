@@ -9,17 +9,21 @@ $ReleasePythonVersion = python -c "import sys; print(f'{sys.version_info.major}.
 if ($LASTEXITCODE -ne 0 -or $ReleasePythonVersion.Trim() -ne "3.14") {
     throw "La construction officielle exige Python 3.14 pour correspondre au verrou de dépendances."
 }
-python -m venv build/release-venv --clear
+# Preserve earlier environments and use a fresh set of dependencies.
+$VenvDirectory = "build/release-venv-$([guid]::NewGuid().ToString('N'))"
+python -m venv $VenvDirectory
 if ($LASTEXITCODE -ne 0) {
     throw "La création de l'environnement de mise en ligne a échoué avec le code $LASTEXITCODE"
 }
-$ReleasePython = (Resolve-Path -LiteralPath "build/release-venv/Scripts/python.exe").Path
+$ReleasePython = (Resolve-Path -LiteralPath "$VenvDirectory/Scripts/python.exe").Path
 & $ReleasePython -m pip install --require-hashes -r requirements-release.txt
 if ($LASTEXITCODE -ne 0) {
     throw "L'installation des dépendances verrouillées a échoué avec le code $LASTEXITCODE"
 }
 
 $AuditArgs = @("scripts/audit_release_readiness.py", "--version", $Version)
+& $ReleasePython -m pip install --no-deps --no-build-isolation .
+if ($LASTEXITCODE -ne 0) { throw "L'installation locale du projet a échoué." }
 if (-not $AllowDirty) {
     $AuditArgs += "--require-clean"
 }
