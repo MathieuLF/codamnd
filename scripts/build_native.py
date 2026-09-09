@@ -81,7 +81,9 @@ def package_record_path(path: str) -> bool:
         and ".." not in relative.parts
         and "__pycache__" not in relative.parts
         and relative.suffix not in {".pyc", ".exe"}
-        and relative.name not in {"direct_url.json", "INSTALLER", "REQUESTED"}
+        # Installed RECORD includes hashes of generated console launchers tied to
+        # the venv path. Verify against it, but ship our own stable inventory.
+        and relative.name not in {"direct_url.json", "INSTALLER", "REQUESTED", "RECORD"}
     )
 
 

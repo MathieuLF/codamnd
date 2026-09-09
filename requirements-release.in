@@ -1,4 +1,4 @@
 # Verrou de construction Windows à résoudre et installer avec Python 3.14.
 packaging==26.3
 pdfplumber==0.11.10
-setuptools==82.0.1
+setuptools==83.0.0

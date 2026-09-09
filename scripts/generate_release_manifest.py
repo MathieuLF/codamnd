@@ -245,7 +245,7 @@ def authenticode_status(path: Path) -> str:
             env={**os.environ, "CODAMND_SIGNATURE_PATH": str(path.resolve())},
             cwd=Path(__file__).resolve().parents[1],
         )
-    except FileNotFoundError:
+    except (OSError, subprocess.TimeoutExpired):
         return pe_status or "Non vérifiée"
     return completed.stdout.strip() or pe_status or "Non vérifiée"
 

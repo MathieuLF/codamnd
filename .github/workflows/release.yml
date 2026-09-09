@@ -114,6 +114,7 @@ jobs:
         run: |
           gh release create $env:TAG_NAME `
             --draft `
+            --target $env:GITHUB_SHA `
             --title "CodaMND v$env:RELEASE_VERSION" `
             --notes-file "dist/CodaMND-v$env:RELEASE_VERSION.release-notes.md" `
             "dist/CodaMND-v$env:RELEASE_VERSION-portable.zip" `

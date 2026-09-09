@@ -89,7 +89,8 @@ def main() -> int:
     file_attributes = file_report.get("data", {}).get("attributes", {}) if isinstance(file_report, dict) else {}
     stats = attributes.get("stats") or file_attributes.get("last_analysis_stats", {})
     stats = stats if isinstance(stats, dict) else {}
-    engine_results = attributes.get("results") or file_attributes.get("last_analysis_results", {})
+    # Never substitute an older file verdict for the analysis we just requested.
+    engine_results = attributes.get("results", {}) if analysis_id else file_attributes.get("last_analysis_results", {})
     detections = collect_detections(engine_results)
     engine_verdict = required_engine_verdict(engine_results, args.require_engine)
     analysis_completed = attributes.get("status") == "completed"

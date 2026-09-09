@@ -16,6 +16,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class NativePrototypeTests(unittest.TestCase):
+    def test_release_signature_timeout_is_unverified_never_valid(self):
+        from scripts import generate_release_manifest as manifest
+        import subprocess
+
+        with (patch.object(manifest, "pe_certificate_status", return_value=None),
+              patch.dict(manifest.os.environ, {"SystemRoot": "C:/Windows"}),
+              patch.object(Path, "is_file", return_value=True),
+              patch.object(manifest.subprocess, "run", side_effect=subprocess.TimeoutExpired("signature", 10))):
+            self.assertEqual(manifest.authenticode_status(Path("synthetic.exe")), "Non vérifiée")
+
     def test_toolchain_rejects_modified_and_unlisted_extracted_files(self):
         from scripts.prepare_native_toolchain import verify_tree
 
@@ -56,7 +66,7 @@ class NativePrototypeTests(unittest.TestCase):
             with self.subTest(verdict=verdict), tempfile.TemporaryDirectory() as temporary:
                 report = Path(temporary) / "report.md"
                 stats = {"malicious": 0, "suspicious": 0, "undetected": 69}
-                results = {"Zillya": {"category": verdict, "result": None}}
+                results = {} if verdict == "unavailable" else {"Zillya": {"category": verdict, "result": None}}
                 args = ["submit_virustotal.py", "--file", "dist/CodaMND/CodaMND.exe", "--output", str(report),
                         "--no-dotenv", "--require-submit", "--fail-on-detections", "--require-engine", "Zillya"]
                 with (patch("sys.argv", args), patch.dict(vt.os.environ, {"VT_API_KEY": "synthetic"}),
@@ -64,7 +74,7 @@ class NativePrototypeTests(unittest.TestCase):
                       patch.object(vt, "read_public_executable", return_value=b"synthetic"),
                       patch.object(vt, "post_file", return_value={"data": {"id": "synthetic"}}),
                       patch.object(vt, "poll_analysis", return_value={"data": {"attributes": {"status": "completed", "stats": stats, "results": results}}}),
-                      patch.object(vt, "get_file_report", return_value={} )):
+                      patch.object(vt, "get_file_report", return_value={"data": {"attributes": {"last_analysis_results": {"Zillya": {"category": "undetected"}}}}} )):
                     self.assertEqual(vt.main(), expected)
                 parsed = manifest.parse_virustotal_report(report)
                 self.assertEqual(parsed["required_engine"], "Zillya")
@@ -74,6 +84,7 @@ class NativePrototypeTests(unittest.TestCase):
         lock = json.loads((ROOT / "packaging/windows/native/toolchain.json").read_text(encoding="utf-8"))
         for workflow in ("ci.yml", "release.yml"):
             self.assertIn(f'python-version: "{lock["python"]["version"]}"', (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8"))
+        self.assertIn('--target $env:GITHUB_SHA', (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
 
     def test_signature_result_never_turns_unknown_or_offline_into_valid(self):
         from codamnd.integrity import signature_status
@@ -122,7 +133,7 @@ class NativePrototypeTests(unittest.TestCase):
                 output_path(child, root)
 
     def test_package_record_filter_rejects_escaping_and_development_paths(self):
-        for path in ("../Scripts/tool.exe", "/absolute.py", "C:/absolute.py", "x\\..\\secret", "x/__pycache__/a.pyc", "x/direct_url.json", "x/a.pyc"):
+        for path in ("../Scripts/tool.exe", "/absolute.py", "C:/absolute.py", "x\\..\\secret", "x/__pycache__/a.pyc", "x/direct_url.json", "x.dist-info/RECORD", "x/a.pyc"):
             with self.subTest(path=path):
                 self.assertFalse(package_record_path(path))
         for path in ("pdfplumber/__init__.py", "pypdfium2_raw/pdfium.dll", "x.dist-info/licenses/LICENSE"):

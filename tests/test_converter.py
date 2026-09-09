@@ -1308,7 +1308,9 @@ class CodaMNDTest(unittest.TestCase):
         self.assertNotIn('cx_Freeze', pyproject)
         self.assertNotIn('freeze-core', pyproject)
         self.assertIn('packaging==26.3', pyproject)
-        self.assertIn('setuptools==82.0.1', pyproject)
+        self.assertIn('setuptools==83.0.0', pyproject)
+        self.assertIn('setuptools==83.0.0', release_lock)
+        self.assertIn('setuptools==83.0.0', (root / "requirements-release.in").read_text(encoding="utf-8"))
         self.assertIn("pdfplumber==0.11.10", release_lock)
         self.assertNotIn("cx-freeze==", release_lock)
         locked_names = generate_sbom._locked_package_names(root / "requirements-release.txt")
@@ -1690,6 +1692,7 @@ class CodaMNDTest(unittest.TestCase):
                 text=True,
                 check=False,
             )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             manifest = json.loads((dist / "CodaMND-v9.9.9.release-manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(completed.returncode, 0, completed.stderr)

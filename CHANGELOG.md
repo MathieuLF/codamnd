@@ -9,6 +9,7 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 - Utilise un lanceur Windows propre à CodaMND, avec son runtime privé, sans changer les règles de conversion.
 - Vérifie la signature Windows avec l'API système, sans lancer PowerShell; les contrôles de révocation utilisent le cache local et les résultats indisponibles restent non vérifiés.
 - Vérifie la provenance du runtime et du compilateur, puis teste le véritable paquet portable avant publication.
+- Actualise l'outil de construction pour intégrer ses correctifs de sécurité.
 - Renforce la confidentialité des diagnostics et des résumés copiés depuis l'application.
 - Traite chaque fichier à partir d'une copie stable en mémoire et borne la lecture des fichiers anormalement volumineux.
 - Durcit la vérification des mises à jour, de la signature Windows et des rapports VirusTotal.
