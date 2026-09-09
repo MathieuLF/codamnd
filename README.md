@@ -22,6 +22,8 @@ Tout se fait sur votre ordinateur : CodaMND n'envoie pas vos fichiers de paie su
 
 Les versions officielles se trouvent sur la page [GitHub Releases](https://github.com/MathieuLF/codamnd/releases). Téléchargez le fichier `CodaMND-v*-portable.zip`, puis extrayez-le avant d'ouvrir l'application.
 
+Vous n'avez pas à installer Python. Gardez simplement tous les fichiers du dossier extrait ensemble.
+
 ## Comment l'utiliser
 
 1. Ajoutez l'écriture détaillée EmployeurD au format TXT.

@@ -109,7 +109,7 @@ if ($SubmitVirusTotal) {
         "--require-submit"
     )
     if (-not $AllowVirusTotalDetections) {
-        $VtArgs += "--fail-on-detections"
+        $VtArgs += @("--fail-on-detections", "--require-engine", "Zillya")
     }
     python @VtArgs
     Assert-LastExitCode "Soumission VirusTotal impossible"
@@ -130,7 +130,7 @@ if ($SubmitVirusTotal) {
         "--version", $ReleaseVersion
     )
     if (-not $AllowVirusTotalDetections) {
-        $ManifestArgs += "--require-clean-virustotal"
+        $ManifestArgs += @("--require-clean-virustotal", "--require-virustotal-engine", "Zillya")
     }
     python @ManifestArgs
     Assert-LastExitCode "Génération du manifeste de mise en ligne impossible"

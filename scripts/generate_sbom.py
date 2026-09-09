@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import platform
 import re
 import sys
@@ -51,6 +52,34 @@ def main() -> int:
     if dependency_issues:
         raise SystemExit("\n".join(dependency_issues))
 
+    inventory_path = Path("dist/CodaMND/build-inventory.json")
+    if not inventory_path.is_file():
+        raise SystemExit("L'inventaire du paquet natif est requis pour le SBOM.")
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    if inventory.get("kind") != "native-portable" or inventory.get("version") != __version__:
+        raise SystemExit("L'inventaire ne correspond pas au paquet à publier.")
+    runtime_names = {re.sub(r"[-_.]+", "-", item["name"]).lower() for item in inventory["distributions"]}
+    for component in components:
+        component["scope"] = "required" if component["name"] == "Python" or component["name"] in runtime_names else "excluded"
+    for tool in ("python", "zig"):
+        spec = inventory["toolchain"][tool]
+        components.append({
+            "type": "framework" if tool == "python" else "application",
+            "name": f"{tool}-build-distribution", "version": spec["version"], "scope": "excluded",
+            "externalReferences": [{"type": "distribution", "url": spec["url"],
+                                    "hashes": [{"alg": "SHA-256", "content": spec["sha256"]}]}],
+        })
+    components.extend({"type": "library", "name": name, "version": "9.0.4", "scope": "required"} for name in ("Tcl", "Tk"))
+    app_dir = inventory_path.parent.resolve()
+    for relative, item in inventory["files"].items():
+        path = (app_dir / relative).resolve()
+        if not path.is_relative_to(app_dir) or not path.is_file():
+            raise SystemExit("Chemin d'inventaire invalide.")
+        with path.open("rb") as stream:
+            actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        if actual != item["sha256"]:
+            raise SystemExit(f"Fichier différent de l'inventaire : {relative}")
+
     payload = {
         "bomFormat": "CycloneDX",
         "specVersion": "1.5",
@@ -63,6 +92,7 @@ def main() -> int:
                 "name": "CodaMND",
                 "version": __version__,
             },
+            "properties": [{"name": "codamnd:build-inventory-sha256", "value": hashlib.sha256(inventory_path.read_bytes()).hexdigest()}],
         },
         "components": components,
     }

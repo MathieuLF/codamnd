@@ -30,6 +30,7 @@ def main() -> int:
     parser.add_argument("--require-submit", action="store_true")
     parser.add_argument("--lookup-only", action="store_true", help="Consulte le rapport VirusTotal existant sans envoyer le fichier.")
     parser.add_argument("--no-dotenv", action="store_true", help="Ne charge pas le fichier .env local.")
+    parser.add_argument("--require-engine", help="Exige un verdict undetected ou harmless de ce moteur.")
     parser.add_argument("--fail-on-detections", action="store_true", help="Échoue si VirusTotal retourne une détection malicious ou suspicious.")
     args = parser.parse_args()
 
@@ -88,7 +89,10 @@ def main() -> int:
     file_attributes = file_report.get("data", {}).get("attributes", {}) if isinstance(file_report, dict) else {}
     stats = attributes.get("stats") or file_attributes.get("last_analysis_stats", {})
     stats = stats if isinstance(stats, dict) else {}
-    detections = collect_detections(file_attributes.get("last_analysis_results", {}))
+    # Never substitute an older file verdict for the analysis we just requested.
+    engine_results = attributes.get("results", {}) if analysis_id else file_attributes.get("last_analysis_results", {})
+    detections = collect_detections(engine_results)
+    engine_verdict = required_engine_verdict(engine_results, args.require_engine)
     analysis_completed = attributes.get("status") == "completed"
     existing_completed = (args.lookup_only or already_present) and _has_complete_stats(stats)
     status = "completed" if analysis_completed or existing_completed else str(attributes.get("status") or "incomplete")
@@ -105,6 +109,8 @@ def main() -> int:
         message=message,
         stats=stats,
         detections=detections,
+        required_engine=args.require_engine,
+        engine_verdict=engine_verdict,
     )
     if (args.require_submit or args.fail_on_detections) and (
         args.lookup_only or not (analysis_completed or existing_completed) or not _has_complete_stats(stats)
@@ -115,11 +121,21 @@ def main() -> int:
     if args.fail_on_detections and (detections or detection_count):
         print(f"VirusTotal: {max(len(detections), detection_count)} détection(s) à examiner.", file=sys.stderr)
         return 4
+    if args.require_engine and engine_verdict not in {"undetected", "harmless"}:
+        print(f"VirusTotal: verdict de {args.require_engine} inexploitable; publication bloquée.", file=sys.stderr)
+        return 6
     print(
         "VirusTotal: "
         f"statut={status}; malicious={stats.get('malicious', 0)}; suspicious={stats.get('suspicious', 0)}"
     )
     return 0
+
+
+def required_engine_verdict(results: Any, engine: str | None) -> str:
+    if not engine or not isinstance(results, dict):
+        return "unavailable"
+    payload = results.get(engine)
+    return str(payload.get("category", "unavailable")) if isinstance(payload, dict) else "unavailable"
 
 
 def validate_public_executable(file_path: Path, *, repo_root: Path | None = None) -> Path:
@@ -284,6 +300,8 @@ def write_report(
     message: str,
     stats: dict[str, Any] | None = None,
     detections: list[dict[str, str]] | None = None,
+    required_engine: str | None = None,
+    engine_verdict: str = "unavailable",
 ) -> None:
     stats = stats or {}
     detections = detections or []
@@ -302,6 +320,8 @@ def write_report(
         for key in ("malicious", "suspicious", "undetected", "harmless", "timeout", "failure"):
             if key in stats:
                 lines.append(f"- {key} : {stats[key]}")
+    if required_engine:
+        lines.extend([f"- Moteur requis : {required_engine}", f"- Verdict du moteur requis : {engine_verdict}"])
     if detections:
         lines.extend(["", "## Détections à examiner", ""])
         for detection in detections:

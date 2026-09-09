@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -20,9 +18,6 @@ from .update_check import (
     release_url_for_version,
 )
 from .version import __version__
-
-
-SIGNATURE_TIMEOUT_SECONDS = 2
 
 
 @dataclass(frozen=True)
@@ -211,29 +206,70 @@ def _looks_like_frozen_app(executable: Path) -> bool:
 def signature_status(path: Path) -> str:
     if not sys.platform.startswith("win"):
         return "Non applicable"
-    system_root = os.environ.get("SystemRoot", "").strip()
-    powershell = Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
-    if not system_root or not powershell.is_file():
+    if not path.is_file():
         return "Non vérifiée"
     try:
-        completed = subprocess.run(
-            [
-                str(powershell),
-                "-NoProfile",
-                "-Command",
-                "(Get-AuthenticodeSignature -LiteralPath $args[0]).Status",
-                str(path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=SIGNATURE_TIMEOUT_SECONDS,
-            check=False,
-            cwd=str(powershell.parent),
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        code = _winverifytrust(path.resolve()) & 0xFFFFFFFF
+    except (OSError, ValueError):
         return "Non vérifiée"
-    status = completed.stdout.strip()
-    return status or "Non vérifiée"
+    return {
+        0: "Valid (cache local)",
+        0x800B0100: "NotSigned",  # TRUST_E_NOSIGNATURE
+        0x80096010: "HashMismatch",  # TRUST_E_BAD_DIGEST
+        0x800B010C: "Revoked",  # CERT_E_REVOKED
+        0x800B0111: "NotTrusted",  # TRUST_E_EXPLICIT_DISTRUST
+        0x800B0109: "NotTrusted",  # CERT_E_UNTRUSTEDROOT
+    }.get(code, "Non vérifiée")
+
+
+def _winverifytrust(path: Path) -> int:
+    """Check embedded Authenticode using Windows, without shell or network.
+
+    Revocation uses the local cache. Missing/offline trust evidence is never
+    reported as valid. This is publisher verification, not an antivirus scan.
+    """
+    import ctypes
+    import uuid
+
+    class FileInfo(ctypes.Structure):
+        _fields_ = [
+            ("size", ctypes.c_uint32), ("path", ctypes.c_wchar_p),
+            ("handle", ctypes.c_void_p), ("subject", ctypes.c_void_p),
+        ]
+
+    class TrustData(ctypes.Structure):
+        _fields_ = [
+            ("size", ctypes.c_uint32), ("policy", ctypes.c_void_p),
+            ("sip", ctypes.c_void_p), ("ui", ctypes.c_uint32),
+            ("revocation", ctypes.c_uint32), ("choice", ctypes.c_uint32),
+            ("file", ctypes.POINTER(FileInfo)), ("state_action", ctypes.c_uint32),
+            ("state", ctypes.c_void_p), ("url", ctypes.c_wchar_p),
+            ("flags", ctypes.c_uint32), ("context", ctypes.c_uint32),
+            ("signature_settings", ctypes.c_void_p),
+        ]
+
+    # Only load the system provider; do not search the current directory/PATH.
+    library = ctypes.WinDLL("wintrust.dll", winmode=0x800)  # LOAD_LIBRARY_SEARCH_SYSTEM32
+    verify = library.WinVerifyTrust
+    verify.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(TrustData)]
+    verify.restype = ctypes.c_int32
+    action = (ctypes.c_ubyte * 16).from_buffer_copy(
+        uuid.UUID("00aac56b-cd44-11d0-8cc2-00c04fc295ee").bytes_le
+    )
+    file_info = FileInfo(ctypes.sizeof(FileInfo), str(path), None, None)
+    data = TrustData()
+    data.size = ctypes.sizeof(TrustData)
+    data.ui = 2  # WTD_UI_NONE
+    data.revocation = 1  # WTD_REVOKE_WHOLECHAIN
+    data.choice = 1  # WTD_CHOICE_FILE (embedded signature, not catalog lookup)
+    data.file = ctypes.pointer(file_info)
+    data.state_action = 1  # WTD_STATEACTION_VERIFY
+    data.flags = 0x1000 | 0x80  # CACHE_ONLY_URL_RETRIEVAL | REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT
+    try:
+        return verify(ctypes.c_void_p(-1), ctypes.byref(action), ctypes.byref(data))
+    finally:
+        data.state_action = 2  # WTD_STATEACTION_CLOSE, including failed checks
+        verify(ctypes.c_void_p(-1), ctypes.byref(action), ctypes.byref(data))
 
 
 def _with_status(
