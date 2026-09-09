@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import importlib.util
 import tempfile
 import unittest
@@ -8,13 +9,72 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.build_native_prototype import FIXED_TIME, output_path, package_record_path, zip_entries
+from scripts.build_native import FIXED_TIME, output_path, package_record_path, zip_entries
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class NativePrototypeTests(unittest.TestCase):
+    def test_toolchain_rejects_modified_and_unlisted_extracted_files(self):
+        from scripts.prepare_native_toolchain import verify_tree
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive_path = root / "tool.zip"
+            destination = root / "tool"
+            destination.mkdir()
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("runtime.dll", b"synthetic")
+            spec = {"sha256": hashlib.sha256(archive_path.read_bytes()).hexdigest(), "strip_prefix": ""}
+            (destination / "runtime.dll").write_bytes(b"synthetic")
+            verify_tree(archive_path, destination, spec)
+            (destination / "runtime.dll").write_bytes(b"changed")
+            with self.assertRaises(ValueError):
+                verify_tree(archive_path, destination, spec)
+            (destination / "runtime.dll").write_bytes(b"synthetic")
+            (destination / "unexpected.dll").write_bytes(b"added")
+            with self.assertRaises(ValueError):
+                verify_tree(archive_path, destination, spec)
+
+    def test_toolchain_rejects_unsafe_zip_paths_and_case_collisions(self):
+        from scripts.prepare_native_toolchain import checked_members
+
+        for names in (("../outside",), ("C:/outside",), ("x\\..\\outside",), ("x./file",), ("A", "a")):
+            with self.subTest(names=names), tempfile.TemporaryDirectory() as temporary:
+                archive_path = Path(temporary) / "tool.zip"
+                with zipfile.ZipFile(archive_path, "w") as archive:
+                    for name in names:
+                        archive.writestr(name, b"synthetic")
+                with zipfile.ZipFile(archive_path) as archive, self.assertRaises(ValueError):
+                    checked_members(archive, "")
+
+    def test_virustotal_zero_with_failed_required_engine_blocks_release(self):
+        from scripts import submit_virustotal as vt, generate_release_manifest as manifest
+
+        for verdict, expected in (("failure", 6), ("undetected", 0), ("malicious", 4), ("unavailable", 6)):
+            with self.subTest(verdict=verdict), tempfile.TemporaryDirectory() as temporary:
+                report = Path(temporary) / "report.md"
+                stats = {"malicious": 0, "suspicious": 0, "undetected": 69}
+                results = {"Zillya": {"category": verdict, "result": None}}
+                args = ["submit_virustotal.py", "--file", "dist/CodaMND/CodaMND.exe", "--output", str(report),
+                        "--no-dotenv", "--require-submit", "--fail-on-detections", "--require-engine", "Zillya"]
+                with (patch("sys.argv", args), patch.dict(vt.os.environ, {"VT_API_KEY": "synthetic"}),
+                      patch.object(vt, "validate_public_executable", return_value=Path("CodaMND.exe")),
+                      patch.object(vt, "read_public_executable", return_value=b"synthetic"),
+                      patch.object(vt, "post_file", return_value={"data": {"id": "synthetic"}}),
+                      patch.object(vt, "poll_analysis", return_value={"data": {"attributes": {"status": "completed", "stats": stats, "results": results}}}),
+                      patch.object(vt, "get_file_report", return_value={} )):
+                    self.assertEqual(vt.main(), expected)
+                parsed = manifest.parse_virustotal_report(report)
+                self.assertEqual(parsed["required_engine"], "Zillya")
+                self.assertEqual(parsed["required_engine_verdict"], verdict)
+
+    def test_native_toolchain_and_ci_share_the_exact_python_version(self):
+        lock = json.loads((ROOT / "packaging/windows/native/toolchain.json").read_text(encoding="utf-8"))
+        for workflow in ("ci.yml", "release.yml"):
+            self.assertIn(f'python-version: "{lock["python"]["version"]}"', (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8"))
+
     def test_signature_result_never_turns_unknown_or_offline_into_valid(self):
         from codamnd.integrity import signature_status
 
@@ -51,7 +111,7 @@ class NativePrototypeTests(unittest.TestCase):
     def test_output_is_new_and_scoped_to_prototype_builds(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            allowed = root / "build/native-prototype"
+            allowed = root / "build/native-release"
             for target in (root, allowed, root / "dist/CodaMND", allowed / "../../outside"):
                 with self.assertRaises(ValueError):
                     output_path(target, root)

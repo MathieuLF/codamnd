@@ -162,17 +162,15 @@ def _gitignore_issues(root: Path) -> list[str]:
 def _release_policy_issues(root: Path) -> list[str]:
     issues: list[str] = []
     pyproject_text = (root / "pyproject.toml").read_text(encoding="utf-8")
-    if "cx_Freeze" not in pyproject_text:
-        issues.append("pyproject.toml doit déclarer cx_Freeze comme dépendance de build.")
-    if "pyinstaller" in pyproject_text.lower():
-        issues.append("pyproject.toml ne doit plus déclarer l'ancien packager pour la mise en ligne officielle.")
+    if any(name in pyproject_text.lower() for name in ("cx_freeze", "freeze-core", "pyinstaller")):
+        issues.append("pyproject.toml ne doit pas déclarer d'ancien lanceur générique.")
 
     build_script = (root / "scripts" / "build_exe.ps1").read_text(encoding="utf-8")
-    if "cx_Freeze" not in build_script:
-        issues.append("scripts/build_exe.ps1 doit utiliser cx_Freeze.")
-    if "pyinstaller" in build_script.lower():
-        issues.append("scripts/build_exe.ps1 ne doit pas utiliser l'ancien packager pour la mise en ligne officielle.")
-    if "--icon" not in build_script or "CodaMND.ico" not in build_script:
+    if "scripts/build_native.py" not in build_script or "scripts/validate_native.py" not in build_script:
+        issues.append("scripts/build_exe.ps1 doit construire et valider le lanceur natif.")
+    if "scripts/prepare_native_toolchain.py" not in build_script:
+        issues.append("scripts/build_exe.ps1 doit vérifier la provenance du runtime et du compilateur.")
+    if "CodaMND.ico" not in build_script:
         issues.append("scripts/build_exe.ps1 doit intégrer l'icône produit Windows.")
     for asset in (
         root / "packaging" / "windows" / "CodaMND.ico",
@@ -182,11 +180,15 @@ def _release_policy_issues(root: Path) -> list[str]:
         if not asset.exists():
             issues.append(f"Asset d'icône produit manquant: {asset.relative_to(root)}")
 
+    if not (root / "packaging/windows/native/toolchain.json").is_file():
+        issues.append("Le verrou du runtime et du compilateur natif est absent.")
     release_workflow = (root / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     if re.search(r"(?m)^  push:\s*$", release_workflow):
         issues.append(".github/workflows/release.yml ne doit pas créer de brouillon automatiquement sur push de tag.")
     if "--fail-on-detections" not in release_workflow:
         issues.append(".github/workflows/release.yml doit bloquer les détections VirusTotal.")
+    if "--require-engine Zillya" not in release_workflow or "--require-virustotal-engine Zillya" not in release_workflow:
+        issues.append(".github/workflows/release.yml doit exiger un verdict exploitable de Zillya.")
     if '"dist/CodaMND-v$env:RELEASE_VERSION-portable.zip"' not in release_workflow:
         issues.append(".github/workflows/release.yml doit publier le ZIP portable comme asset principal.")
     if "-portable.exe.sha256" not in release_workflow:

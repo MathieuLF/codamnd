@@ -1,61 +1,31 @@
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version = "0.1.0",
-    [string]$Python = ""
+    [string]$Version = "0.2.1",
+    [string]$Python = "python"
 )
 
 $ErrorActionPreference = "Stop"
-$Name = "CodaMND"
-
-$PythonExe = $Python
-if (-not $PythonExe) {
-    $BuildVenvPython = ".venv-build/Scripts/python.exe"
-    if (Test-Path -LiteralPath $BuildVenvPython) {
-        $PythonExe = (Resolve-Path -LiteralPath $BuildVenvPython).Path
-    } else {
-        $PythonExe = "python"
-    }
+$RepoRoot = (Resolve-Path -LiteralPath "$PSScriptRoot/..").Path
+Set-Location -LiteralPath $RepoRoot
+$AppVersion = & $Python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+if ($LASTEXITCODE -ne 0 -or $AppVersion.Trim() -ne $Version) {
+    throw "La version demandée ne correspond pas au code source."
 }
-
-$Manifest = (Resolve-Path -LiteralPath "packaging/windows/CodaMND.manifest").Path
-$Icon = (Resolve-Path -LiteralPath "packaging/windows/CodaMND.ico").Path
-$TargetDir = "dist/$Name"
-$PortableZip = "dist/$Name-v$Version-portable.zip"
-
+# Never erase an earlier candidate or its antivirus evidence.
+if ((Test-Path -LiteralPath "dist/CodaMND") -or (Get-ChildItem -Path "dist/CodaMND-v$Version*" -ErrorAction SilentlyContinue)) {
+    throw "Des artefacts existent déjà dans dist. Archivez-les avant de reconstruire."
+}
+& $Python scripts/prepare_native_toolchain.py
+if ($LASTEXITCODE -ne 0) { throw "La vérification de la chaîne de construction a échoué." }
+$BuildOutput = "build/native-release/package-$([guid]::NewGuid().ToString('N'))"
+# build_native.py embeds packaging/windows/CodaMND.ico and CodaMND.manifest.
+& $Python scripts/build_native.py --output $BuildOutput
+if ($LASTEXITCODE -ne 0) { throw "La construction native a échoué." }
+& $Python scripts/validate_native.py --app "$BuildOutput/CodaMND"
+if ($LASTEXITCODE -ne 0) { throw "La validation du paquet portable a échoué." }
 New-Item -ItemType Directory -Path "dist" -Force | Out-Null
-Remove-Item -LiteralPath $TargetDir -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath "dist/$Name.exe" -Force -ErrorAction SilentlyContinue
-Get-ChildItem -LiteralPath "dist" -Filter "$Name-v$Version*" -File -ErrorAction SilentlyContinue | Remove-Item -Force
-
-& $PythonExe -m cx_Freeze `
-    --script "src/codamnd/gui_entry.py" `
-    --base gui `
-    --target-name $Name `
-    --target-dir $TargetDir `
-    --manifest $Manifest `
-    --icon $Icon `
-    --copyright "Copyright 2026 Mathieu Lapointe-Fiset" `
-    build_exe
-if ($LASTEXITCODE -ne 0) {
-    throw "cx_Freeze a échoué avec le code $LASTEXITCODE"
-}
-
-Copy-Item -LiteralPath "config" -Destination "$TargetDir/config" -Recurse -Force
-
-$PortableExe = "$TargetDir/$Name.exe"
-if (-not (Test-Path $PortableExe)) {
-    throw "Exécutable portable introuvable: $PortableExe"
-}
-
-$PortableExeHash = Get-FileHash -Algorithm SHA256 $PortableExe
-$PortableExeHash.Hash + "  $Name.exe" | Set-Content -Encoding ascii "dist/$Name-v$Version-portable.exe.sha256"
-
-if (Test-Path $PortableZip) {
-    Remove-Item -LiteralPath $PortableZip -Force
-}
-Compress-Archive -LiteralPath $TargetDir -DestinationPath $PortableZip -Force
-$PortableZipHash = Get-FileHash -Algorithm SHA256 $PortableZip
-$PortableZipHash.Hash + "  $Name-v$Version-portable.zip" | Set-Content -Encoding ascii "$PortableZip.sha256"
-
-$PortableExeHash | Format-List
-$PortableZipHash | Format-List
+Copy-Item -LiteralPath "$BuildOutput/CodaMND" -Destination "dist/CodaMND" -Recurse
+Copy-Item -LiteralPath "$BuildOutput/CodaMND-v$Version-portable.zip" -Destination "dist"
+Copy-Item -LiteralPath "$BuildOutput/CodaMND-v$Version-portable.zip.sha256" -Destination "dist"
+$ExeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath "dist/CodaMND/CodaMND.exe").Hash.ToLowerInvariant()
+"$ExeHash  CodaMND.exe" | Set-Content -Encoding ascii "dist/CodaMND-v$Version-portable.exe.sha256"

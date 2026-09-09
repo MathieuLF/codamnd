@@ -1,4 +1,4 @@
-/* CodaMND prototype: documented CPython 3.14 embedding API, no generic freezer.
+/* CodaMND: documented CPython 3.14 embedding API, no generic freezer.
  * Only the private runtime beside this EXE is loaded. No shell, extraction,
  * download, interpreter command-line options, or PATH-based runtime discovery.
  */

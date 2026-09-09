@@ -1,4 +1,4 @@
-"""Fixed entry point for the native prototype; not a general Python launcher."""
+"""Fixed application entry point; not a general Python launcher."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ def configure_runtime() -> Path:
     # Tcl/Tk also has environment-based discovery, independent of Python -I.
     for name in ("TCL_LIBRARY", "TK_LIBRARY", "TCLLIBPATH"):
         os.environ.pop(name, None)
-    # CPython 3.14's Tcl/Tk 9 archives are distributed at their standard location.
-    # The DLLs mount those archives themselves. Do not resolve Tcl from the host.
+    # The official portable runtime embeds Tcl/Tk 9 libraries in its DLLs.
+    # The DLLs mount them themselves. Do not resolve Tcl from the host.
     return root
 
 
@@ -32,7 +32,6 @@ def main(argv: list[str] | None = None) -> int:
         from codamnd.app_gui import CodaMNDApp
 
         app = CodaMNDApp()
-        app.title(app.title() + " — prototype")
         app.mainloop()
         return 0
     except Exception:
@@ -41,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         ctypes.windll.user32.MessageBoxW(
             None,
             "Impossible d'ouvrir CodaMND. Vérifiez que le dossier portable est complet.",
-            "CodaMND — prototype",
+            "CodaMND",
             0x10,
         )
         return 1

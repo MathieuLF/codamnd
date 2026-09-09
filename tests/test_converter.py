@@ -175,7 +175,7 @@ class CodaMNDTest(unittest.TestCase):
         self.assertTrue(package_asset_path("app-icon.png").exists())
         self.assertTrue((root / "packaging" / "windows" / "CodaMND.ico").exists())
         self.assertTrue((root / "docs" / "assets" / "product-icon.png").exists())
-        self.assertIn("--icon", (root / "scripts" / "build_exe.ps1").read_text(encoding="utf-8"))
+        self.assertIn('1 ICON', (root / "scripts" / "build_native.py").read_text(encoding="utf-8"))
 
     def test_source_totals_balance_with_decimal(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1239,11 +1239,11 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("Préparer une mise en ligne manuelle", workflow)
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("  push:\n", workflow)
-        self.assertIn('python-version: "3.14"', workflow)
+        self.assertIn('python-version: "3.14.7"', workflow)
         self.assertIn("INPUT_TAG_NAME: ${{ inputs.tag_name }}", workflow)
         self.assertIn('if ($tag -ne "v$version")', workflow)
         self.assertIn("group: codamnd-release", workflow)
-        self.assertIn("timeout-minutes: 20", workflow)
+        self.assertIn("timeout-minutes: 40", workflow)
         self.assertIn('$env:GITHUB_REF_NAME -ne "main"', workflow)
         self.assertIn("refs/remotes/origin/main", workflow)
         self.assertIn("$virusTotalExitCode = $LASTEXITCODE", workflow)
@@ -1305,11 +1305,12 @@ class CodaMNDTest(unittest.TestCase):
         release_lock = (root / "requirements-release.txt").read_text(encoding="utf-8")
 
         self.assertIn('pdfplumber>=0.11.10,<0.12', pyproject)
-        self.assertIn('cx_Freeze==8.6.4', pyproject)
-        self.assertIn('freeze-core==0.6.1', pyproject)
+        self.assertNotIn('cx_Freeze', pyproject)
+        self.assertNotIn('freeze-core', pyproject)
+        self.assertIn('packaging==26.3', pyproject)
         self.assertIn('setuptools==82.0.1', pyproject)
         self.assertIn("pdfplumber==0.11.10", release_lock)
-        self.assertIn("cx-freeze==8.6.4", release_lock)
+        self.assertNotIn("cx-freeze==", release_lock)
         locked_names = generate_sbom._locked_package_names(root / "requirements-release.txt")
         self.assertIn("pdfplumber", locked_names)
         self.assertIn("pypdfium2", locked_names)

@@ -1,0 +1,18 @@
+{
+  "python": {
+    "version": "3.14.7",
+    "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-amd64.zip",
+    "sha256": "ac1a727a71738e11de80b76e975f9b8a258aea6412bfc31696b929d59c6aafd0",
+    "directory": "python-3.14.7-amd64",
+    "strip_prefix": "",
+    "hash_source": "https://www.python.org/ftp/python/index-windows.json"
+  },
+  "zig": {
+    "version": "0.15.2",
+    "url": "https://ziglang.org/download/0.15.2/zig-x86_64-windows-0.15.2.zip",
+    "sha256": "3a0ed1e8799a2f8ce2a6e6290a9ff22e6906f8227865911fb7ddedc3cc14cb0c",
+    "directory": "zig-x86_64-windows-0.15.2",
+    "strip_prefix": "zig-x86_64-windows-0.15.2/",
+    "hash_source": "https://ziglang.org/download/index.json"
+  }
+}

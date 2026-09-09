@@ -23,6 +23,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--virustotal-report", type=Path)
     parser.add_argument("--require-clean-virustotal", action="store_true")
+    parser.add_argument("--require-virustotal-engine")
     args = parser.parse_args()
 
     version = args.version.strip().lstrip("v")
@@ -64,6 +65,11 @@ def main() -> int:
 
     virustotal = parse_virustotal_report(vt_report)
     virustotal_provenance_valid = is_clean_virustotal_report(virustotal, exe_sha256)
+    if args.require_virustotal_engine and (
+        virustotal.get("required_engine") != args.require_virustotal_engine
+        or virustotal.get("required_engine_verdict") not in {"undetected", "harmless"}
+    ):
+        issues.append("Le moteur antivirus requis n'a pas rendu de verdict exploitable sans détection.")
     if args.require_clean_virustotal:
         if not vt_report.exists():
             issues.append(f"Rapport VirusTotal manquant: {vt_report}")
@@ -185,6 +191,10 @@ def parse_virustotal_report(path: Path) -> dict[str, Any]:
             result["sha256"] = match.group(0).lower() if match else ""
         elif stripped.startswith("- Statut :"):
             result["status"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("- Moteur requis :"):
+            result["required_engine"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("- Verdict du moteur requis :"):
+            result["required_engine_verdict"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("- Lien :"):
             result["link"] = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("- malicious :"):

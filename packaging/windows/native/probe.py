@@ -1,4 +1,4 @@
-"""Explicit local diagnostic for the prototype. Uses supplied synthetic fixtures.
+"""Explicit local diagnostic. Uses supplied synthetic fixtures.
 
 No upload or real update request. Never overwrite an existing report.
 """

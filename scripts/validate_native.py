@@ -1,4 +1,4 @@
-"""Exercise a built native prototype using synthetic fixtures and isolated paths."""
+"""Exercise the portable build using synthetic fixtures and isolated paths."""
 
 from __future__ import annotations
 
@@ -19,11 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def run(app: Path) -> Path:
     app = app.resolve(strict=True)
-    if not (app / "PROTOTYPE.md").is_file():
-        raise ValueError("Le dossier ne correspond pas au prototype.")
+    if not (app / "build-inventory.json").is_file():
+        raise ValueError("Le dossier ne correspond pas à la construction native.")
     if sys.platform != "win32":
         raise ValueError("La validation du binaire exige Windows.")
-    workspace = Path(tempfile.mkdtemp(prefix="validation-", dir=ROOT / "build/native-prototype"))
+    validation_root = ROOT / "build/native-release"
+    validation_root.mkdir(parents=True, exist_ok=True)
+    workspace = Path(tempfile.mkdtemp(prefix="validation-", dir=validation_root))
     fixtures = workspace / "fixtures"
     fixtures.mkdir()
     for source in (ROOT / "samples").glob("*.txt"):
@@ -61,9 +63,9 @@ def run(app: Path) -> Path:
     })
     relocation = workspace / "Déplacement avec espaces" / "CodaMND"
     shutil.copytree(app, relocation)
-    archives = list(app.parent.glob("CodaMND-v*-native-prototype.zip"))
+    archives = list(app.parent.glob("CodaMND-v*-portable.zip"))
     if len(archives) != 1:
-        raise ValueError("Un seul ZIP prototype doit accompagner le dossier applicatif.")
+        raise ValueError("Un seul ZIP portable doit accompagner le dossier applicatif.")
     extracted = workspace / "extracted-zip"
     with zipfile.ZipFile(archives[0]) as archive:
         for member in archive.infolist():
@@ -105,7 +107,7 @@ def run(app: Path) -> Path:
     assert completed.returncode != 0
     assert not (workspace / "must-not-exist.json").exists()
     results.append({"case": "missing-private-runtime-fails-closed", "ok": True})
-    inventory = json.loads((app / "prototype-inventory.json").read_text(encoding="utf-8"))
+    inventory = json.loads((app / "build-inventory.json").read_text(encoding="utf-8"))
     assert not any("freeze" in item["name"].lower() for item in inventory["distributions"])
     summary = {"ok": True, "app": str(app), "reference_mnd_sha256": reference.mnd_sha256, "checks": results,
                "limitation": "Python is installed on the test host; PATH/env isolation and loaded-module confinement are tested, not a clean Windows VM."}
