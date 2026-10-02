@@ -4,6 +4,13 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+- Ajoute un setup de développement avec dépendances verrouillées et des consignes pour Linux et Codex Cloud.
+- Réunit lint, vérification de types ciblée, tests, compilation et audit local dans la commande de validation.
+- Vérifie Linux et les runtimes Windows de revue et de build en CI, avec un contrôle de lancement graphique et Gitleaks.
+- Inclut les configurations par défaut dans le paquet Python et permet à la CLI de fonctionner hors du dépôt.
+- Corrige un test de chemin dépendant de Windows et couvre les parcours CLI avec des données synthétiques.
+- Renforce la concordance version, tag et commit avant publication.
+
 ## [0.2.1] - 2026-09-09
 
 - Utilise un lanceur Windows propre à CodaMND, avec son runtime privé, sans changer les règles de conversion.

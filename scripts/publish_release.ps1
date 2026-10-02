@@ -15,6 +15,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Refuser une demande incohérente avant la modification de version ou le build.
+if ($CreateGitHubRelease -and (-not $CommitVersion -or -not $Push -or -not $SubmitVirusTotal)) {
+    throw "Une publication exige -CommitVersion, -Push et -SubmitVirusTotal."
+}
+if ($CreateGitHubRelease -and $AllowVirusTotalDetections) {
+    throw "Une publication officielle ne peut pas ignorer les détections VirusTotal."
+}
+if ($PublishNow -and -not $CreateGitHubRelease) { throw "-PublishNow exige -CreateGitHubRelease." }
+if ($CreateGitHubRelease -and (git branch --show-current).Trim() -ne "main") {
+    throw "Une publication officielle doit partir de main."
+}
+
 function Assert-LastExitCode([string]$Message) {
     if ($LASTEXITCODE -ne 0) {
         throw "$Message (exit $LASTEXITCODE)"
@@ -170,6 +182,9 @@ if ($LASTEXITCODE -ne 0) {
     Assert-LastExitCode "Création du tag impossible"
 }
 
+python scripts/check_release_tag.py --tag $Tag --version $ReleaseVersion
+Assert-LastExitCode "Le tag ne correspond pas au commit à publier"
+
 if ($Push) {
     $Branch = (git branch --show-current).Trim()
     git push origin $Branch
@@ -188,6 +203,7 @@ if ($CreateGitHubRelease) {
     }
     $ReleaseArgs = @(
         "release", "create", $Tag,
+        "--verify-tag",
         "--title", "CodaMND v$ReleaseVersion",
         "--notes-file", "dist/$Name-v$ReleaseVersion.release-notes.md",
         $PortableZip,

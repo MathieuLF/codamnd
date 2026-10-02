@@ -83,7 +83,12 @@ class NativePrototypeTests(unittest.TestCase):
     def test_native_toolchain_and_ci_share_the_exact_python_version(self):
         lock = json.loads((ROOT / "packaging/windows/native/toolchain.json").read_text(encoding="utf-8"))
         for workflow in ("ci.yml", "release.yml"):
-            self.assertIn(f'python-version: "{lock["python"]["version"]}"', (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8"))
+            content = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+            if workflow == "ci.yml":
+                self.assertIn(f'python: "{lock["python"]["version"]}"', content)
+                self.assertIn('python-version: ${{ matrix.python }}', content)
+            else:
+                self.assertIn(f'python-version: "{lock["python"]["version"]}"', content)
         self.assertIn('--target $env:GITHUB_SHA', (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
 
     def test_signature_result_never_turns_unknown_or_offline_into_valid(self):

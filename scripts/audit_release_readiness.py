@@ -37,6 +37,8 @@ IGNORED_DIRS = {
     "logs",
     "notes-privees",
     "outputs",
+    "output",
+    "public",
     "venv",
     "ENV",
 }
@@ -55,6 +57,11 @@ TEXT_SUFFIXES = {
     ".txt",
     ".yml",
     ".yaml",
+    ".example",
+    ".html",
+    ".js",
+    ".css",
+    ".sh",
 }
 REQUIRED_GITIGNORE_PATTERNS = (
     ".env",
@@ -67,6 +74,7 @@ REQUIRED_GITIGNORE_PATTERNS = (
     "logs/",
     "dist/",
     "build/",
+    "public/",
     "*.pem",
     "*.key",
     "*.p12",
@@ -199,6 +207,8 @@ def _release_policy_issues(root: Path) -> list[str]:
         issues.append(".github/workflows/release.yml doit générer et publier le manifeste de mise en ligne.")
     if "append_release_verification.py" not in release_workflow:
         issues.append(".github/workflows/release.yml doit afficher le score VirusTotal dans les notes de mise en ligne.")
+    if "check_release_tag.py" not in release_workflow or "--verify-tag" not in release_workflow:
+        issues.append(".github/workflows/release.yml doit vérifier le tag et son commit avant publication.")
     if re.search(r"(?m)^\s*\"dist/CodaMND-v\$env:RELEASE_VERSION\.exe\"\s*`?$", release_workflow):
         issues.append(".github/workflows/release.yml ne doit pas publier de .exe direct sans certificat.")
 
@@ -219,6 +229,8 @@ def _release_policy_issues(root: Path) -> list[str]:
         issues.append("scripts/publish_release.ps1 doit exiger main pour une mise en ligne officielle.")
     if "refs/remotes/origin/main" not in publish_script:
         issues.append("scripts/publish_release.ps1 doit vérifier que origin/main pointe sur HEAD.")
+    if "check_release_tag.py" not in publish_script or "--verify-tag" not in publish_script:
+        issues.append("scripts/publish_release.ps1 doit vérifier le tag et son commit avant publication.")
     if re.search(r"(?m)^\s*\"dist/\$Name-v\$ReleaseVersion\.exe\"\s*,?\s*$", publish_script):
         issues.append("scripts/publish_release.ps1 ne doit pas publier de .exe direct sans certificat.")
 
@@ -264,21 +276,26 @@ def _workflow_action_issues(root: Path) -> list[str]:
     return issues
 
 
+def _secret_issues(root: Path) -> list[str]:
+    issues: list[str] = []
+    for directory, subdirs, files in root.walk():
+        subdirs[:] = [name for name in subdirs if not _is_ignored_for_scan(root, directory / name)]
+        for name in files:
+            path = directory / name
+            if _is_ignored_for_scan(root, path) or path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                if any(pattern.search(line) for pattern in SECRET_PATTERNS):
+                    issues.append(f"Secret potentiel: {path.relative_to(root)}:{line_number}")
+    return issues
+
+
 def _secret_issue_count(root: Path) -> int:
-    issue_count = 0
-    for path in root.rglob("*"):
-        if not path.is_file() or _is_ignored_for_scan(root, path):
-            continue
-        if path.suffix.lower() not in TEXT_SUFFIXES:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        for line in text.splitlines():
-            if any(pattern.search(line) for pattern in SECRET_PATTERNS):
-                issue_count += 1
-    return issue_count
+    return len(_secret_issues(root))
 
 
 def _public_screenshot_issues(root: Path) -> list[str]:
@@ -320,7 +337,7 @@ def _is_ignored_for_scan(root: Path, path: Path) -> bool:
     if path.name == ".env" or (path.name.startswith(".env.") and path.name != ".env.example"):
         return True
     relative_parts = path.relative_to(root).parts
-    if any(part == ".venv" or part.startswith(".venv-") for part in relative_parts):
+    if any(part == ".venv" or part.startswith(".venv-") or part.endswith(".egg-info") for part in relative_parts):
         return True
     return any(part in IGNORED_DIRS for part in relative_parts)
 
