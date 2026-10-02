@@ -1046,7 +1046,9 @@ class CodaMNDTest(unittest.TestCase):
     def test_gui_ignores_temporary_saved_output_dir(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(_usable_saved_output_dir(directory), "")
-        self.assertEqual(_usable_saved_output_dir("C:/Sorties"), "C:/Sorties")
+        # Un chemin absolu hors du répertoire temporaire, sur les deux OS.
+        output_dir = str(Path(Path(tempfile.gettempdir()).resolve().anchor) / "Sorties")
+        self.assertEqual(_usable_saved_output_dir(output_dir), output_dir)
 
     def test_gui_state_rejects_output_path_that_is_file(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -1383,7 +1385,7 @@ class CodaMNDTest(unittest.TestCase):
         self.assertIn("copilot-setup-steps:", setup)
         self.assertIn("runs-on: windows-latest", setup)
         self.assertIn("timeout-minutes: 5", setup)
-        self.assertIn("python -m pip install -e .", setup)
+        self.assertIn("python scripts/setup_dev.py", setup)
         self.assertIn("Vérifier les imports", setup)
         self.assertIn("python scripts/agent_validate.py", contributing)
         self.assertIn("python scripts/agent_validate.py", pr_template)
@@ -1402,15 +1404,17 @@ class CodaMNDTest(unittest.TestCase):
             commands,
         )
 
-    def test_python_version_policy_is_312_only(self) -> None:
+    def test_ci_covers_review_and_windows_build_runtimes(self) -> None:
         root = Path(__file__).resolve().parents[1]
         pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
         ci = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         agents = (root / "AGENTS.md").read_text(encoding="utf-8")
 
         self.assertIn('requires-python = ">=3.12"', pyproject)
-        self.assertIn('python-version: "3.12"', ci)
-        self.assertNotIn("matrix:", ci)
+        self.assertIn('python: "3.12"', ci)
+        self.assertIn('python: "3.14.7"', ci)
+        self.assertIn("ubuntu-24.04", ci)
+        self.assertIn("scripts/agent_validate.py", ci)
         self.assertNotIn("3.11", ci)
         self.assertIn("Python 3.12", agents)
 

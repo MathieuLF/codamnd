@@ -20,6 +20,9 @@ def project_version(root: Path = ROOT) -> str:
 
 def validation_commands(*, version: str, skip_release_audit: bool = False) -> list[list[str]]:
     commands = [
+        [sys.executable, "-m", "pip", "check"],
+        [sys.executable, "-m", "ruff", "check", "src", "scripts", "tests", "convert.py"],
+        [sys.executable, "-m", "mypy"],
         [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
         [sys.executable, "-X", "pycache_prefix=build/pycache", "-m", "compileall", "src", "scripts"],
     ]
@@ -41,6 +44,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Valide rapidement l'environnement local du dépôt.")
     parser.add_argument("--skip-release-audit", action="store_true", help="Ignore l'audit de préparation de release.")
     args = parser.parse_args(argv)
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        print("Tkinter est requis. Voir docs/developpement.md pour le setup Linux.", file=sys.stderr)
+        return 2
     version = project_version()
     return run_commands(validation_commands(version=version, skip_release_audit=args.skip_release_audit))
 

@@ -1,13 +1,14 @@
 [project]
 name = "codamnd"
 version = "0.2.1"
-description = "Outil Windows local pour créer un fichier MND pour MégaGest à partir d'une écriture détaillée EmployeurD (TXT), avec contrôle des soldes et rapports de validation."
+description = "Outil Windows local pour crÃ©er un fichier MND pour MÃ©gaGest Ã  partir d'une Ã©criture dÃ©taillÃ©e EmployeurD (TXT), avec contrÃ´le des soldes et rapports de validation."
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["pdfplumber>=0.11.10,<0.12"]
+dependencies = ["pdfplumber>=0.11.10,<0.12", "PyYAML>=6.0.3,<7"]
 
 [project.optional-dependencies]
 build = ["packaging==26.3"]
+dev = ["ruff==0.16.10", "mypy==2.4.0"]
 
 [build-system]
 requires = ["setuptools==83.0.0"]
@@ -26,3 +27,28 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 codamnd = ["assets/*.png"]
+
+[tool.setuptools.data-files]
+"share/codamnd/config" = ["config/app.yml", "config/comptes.yml", "config/rapports.yml", "config/regles_validation.yml"]
+
+[tool.ruff]
+target-version = "py312"
+extend-exclude = ["build", "dist", "public"]
+
+[tool.ruff.lint]
+# Erreurs de syntaxe, variables inconnues et comparaisons invalides.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+    "src/codamnd/models.py",
+    "src/codamnd/errors.py",
+    "src/codamnd/parser_employeurd.py",
+    "src/codamnd/parser_mnd.py",
+    "src/codamnd/writer_mnd.py",
+    "src/codamnd/output_plan.py",
+]
+follow_imports = "silent"
+disallow_untyped_defs = true
+check_untyped_defs = true
