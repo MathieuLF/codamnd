@@ -52,7 +52,7 @@ def runtime_distributions(lock: dict[str, str]) -> list[metadata.Distribution]:
     from packaging.requirements import Requirement
     from packaging.utils import canonicalize_name
 
-    pending = ["pdfplumber"]
+    pending = ["pdfplumber", "PyYAML"]
     found: dict[str, metadata.Distribution] = {}
     while pending:
         name = canonicalize_name(pending.pop())

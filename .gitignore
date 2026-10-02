@@ -39,6 +39,7 @@ output/
 logs/
 dist/
 build/
+public/
 *.log
 
 *.mnd

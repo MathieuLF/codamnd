@@ -38,4 +38,10 @@ def default_config_dir() -> Path:
     bundled_config = application_root() / "config"
     if bundled_config.exists():
         return bundled_config
+    source_config = Path(__file__).resolve().parents[2] / "config"
+    if source_config.exists():
+        return source_config
+    installed_config = Path(sys.prefix) / "share" / "codamnd" / "config"
+    if installed_config.exists():
+        return installed_config
     return cwd_config

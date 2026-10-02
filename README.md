@@ -61,11 +61,21 @@ Pour demander de l'aide, décrivez le problème avec un exemple fictif ou une ca
 Le code source est public sous licence MIT. Pour préparer l'environnement de développement et lancer la validation complète :
 
 ```powershell
-python -m pip install -e .
+python scripts/setup_dev.py
+.venv\Scripts\Activate.ps1
 python scripts/agent_validate.py
 ```
 
 La validation courante ne demande ni base de données, ni serveur, ni clé secrète.
+Python 3.12 ou plus récent et Tkinter sont requis. Le setup installe les dépendances
+verrouillées dans `.venv`. La validation exécute le contrôle des dépendances, le lint,
+le typecheck ciblé, les tests, la compilation et l'audit local de release.
+
+Depuis les sources : `codamnd inspect-source samples/employeurd-balanced.txt` pour
+la CLI, ou `codamnd-gui` pour l'interface graphique avec un affichage disponible.
+
+Consultez le [guide de développement et Codex Cloud](docs/developpement.md) pour
+Linux, l'architecture, la configuration, les builds Windows et le dépannage.
 
 ## Licence
 
