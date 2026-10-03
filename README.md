@@ -80,3 +80,17 @@ Linux, l'architecture, la configuration, les builds Windows et le dépannage.
 ## Licence
 
 CodaMND est distribué sous licence MIT. EmployeurD, PG Solutions, MégaGest et les autres marques citées appartiennent à leurs propriétaires respectifs.
+
+## Profils de validation pour le développement
+
+Après le setup, utiliser le profil développement pendant les itérations. Les commandes historiques gardent leur comportement et les contrôles restent manuels.
+
+| Profil | Commande depuis la racine |
+| --- | --- |
+| Développement | `python scripts/agent_validate.py --profile dev` |
+| Validation complète existante | `python scripts/agent_validate.py --profile complete` |
+| Release | Parcours Windows de packaging/publication documenté |
+
+Dépendances, lint, types, tous les tests unitaires et compilation. Seul l’audit de préparation de release est réservé au profil complete; aucun packaging Windows ni secret VirusTotal en développement.
+
+Le succès du profil développement prouve uniquement ce périmètre. Pour un changement métier, de permissions, de RLS ou de migration, exécuter également les intégrations concernées; pour un changement UI, exécuter les parcours navigateur concernés. Aucune assertion ou exigence de release n’est assouplie. Installer les dépendances avec le setup verrouillé après une modification de lockfile; les profils légers ne remplacent pas le setup.

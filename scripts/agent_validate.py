@@ -42,6 +42,8 @@ def run_commands(commands: list[list[str]], *, root: Path = ROOT) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Valide rapidement l'environnement local du dépôt.")
+    parser.add_argument("--profile", choices=("dev", "complete"), default="complete",
+                        help="dev : contrôles locaux sans audit release; complete conserve la validation historique.")
     parser.add_argument("--skip-release-audit", action="store_true", help="Ignore l'audit de préparation de release.")
     args = parser.parse_args(argv)
     try:
@@ -50,7 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Tkinter est requis. Voir docs/developpement.md pour le setup Linux.", file=sys.stderr)
         return 2
     version = project_version()
-    return run_commands(validation_commands(version=version, skip_release_audit=args.skip_release_audit))
+    if args.profile == "dev":
+        print("Profil développement : dépendances, lint, types, tests et compilation; audit release et packaging Windows non exécutés.", flush=True)
+    return run_commands(validation_commands(version=version,
+                        skip_release_audit=args.skip_release_audit or args.profile == "dev"))
 
 
 if __name__ == "__main__":
