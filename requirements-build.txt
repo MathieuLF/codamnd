@@ -1,4 +1,4 @@
 -r requirements-runtime.txt
 -r requirements-tools.txt
-setuptools==83.0.0
+setuptools==84.0.0
 -e .[dev,build]
