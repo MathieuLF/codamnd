@@ -4,7 +4,7 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
-- Ajoute un setup de développement avec dépendances verrouillées et des consignes pour Linux et environnement de développement distant.
+- Ajoute un setup de développement avec dépendances verrouillées et des consignes pour Linux et les environnements distants.
 - Réunit lint, vérification de types ciblée, tests, compilation et audit local dans la commande de validation.
 - Vérifie Linux et les runtimes Windows de revue et de build en CI, avec un contrôle de lancement graphique et Gitleaks.
 - Inclut les configurations par défaut dans le paquet Python et permet à la CLI de fonctionner hors du dépôt.
