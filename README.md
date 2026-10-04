@@ -74,7 +74,7 @@ le typecheck ciblé, les tests, la compilation et l'audit local de release.
 Depuis les sources : `codamnd inspect-source samples/employeurd-balanced.txt` pour
 la CLI, ou `codamnd-gui` pour l'interface graphique avec un affichage disponible.
 
-Consultez le [guide de développement et environnement de développement distant](docs/developpement.md) pour
+Consultez le [guide de développement](docs/developpement.md) pour
 Linux, l'architecture, la configuration, les builds Windows et le dépannage.
 
 ## Licence

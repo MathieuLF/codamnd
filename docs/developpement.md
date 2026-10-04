@@ -1,4 +1,4 @@
-# Développement et environnement de développement distant
+# Développement
 
 ## Architecture
 
@@ -41,8 +41,8 @@ Si Python est fourni par un autre gestionnaire, vérifier `python -c "import tki
 avec cet interpréteur. Le paquet système `python3-tk` ne complète pas automatiquement
 un Python installé séparément. Aucun secret, `.env`, serveur, migration ou seed requis.
 
-Pour environnement de développement distant, choisir Python 3.12, faire préparer et tester ces commandes dans
-l'environnement, puis publier sa configuration. Le script d'installation à enregistrer
+Pour un environnement de développement distant, préparer Python 3.12
+et tester les commandes ci-dessus. Le script d'installation à enregistrer
 est `python3 scripts/setup_dev.py` après préparation de Tkinter/venv. Pour les tâches,
 utiliser `.venv/bin/python scripts/agent_validate.py`; ne pas supposer que l'activation
 effectuée dans une autre session shell persiste. Aucun service n'est à démarrer.
@@ -51,8 +51,7 @@ L'installation nécessite l'accès aux dépôts système, à PyPI et à ses whee
 Les tests et conversions synthétiques fonctionnent ensuite sans réseau. Les mises à
 jour publiques consultent GitHub seulement si elles sont demandées; VirusTotal et
 les identifiants de publication restent hors du setup Cloud courant.
-Republier le setup si les dépendances ou le runtime changent et vérifier une nouvelle tâche.
-Voir la [documentation officielle Cloud](https://learn.chatgpt.com/docs/environments/cloud-environments).
+Recréer et vérifier l’environnement si les dépendances ou le runtime changent.
 
 ## Lancement et configuration
 
