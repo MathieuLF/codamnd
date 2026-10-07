@@ -4,12 +4,17 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.2] - 2026-10-07
+
 - Ajoute un setup de développement avec dépendances verrouillées et des consignes pour Linux et les environnements distants.
 - Réunit lint, vérification de types ciblée, tests, compilation et audit local dans la commande de validation.
 - Vérifie Linux et les runtimes Windows de revue et de build en CI, avec un contrôle de lancement graphique et Gitleaks.
 - Inclut les configurations par défaut dans le paquet Python et permet à la CLI de fonctionner hors du dépôt.
 - Corrige un test de chemin dépendant de Windows et couvre les parcours CLI avec des données synthétiques.
 - Renforce la concordance version, tag et commit avant publication.
+- Accepte les périodes comptables à deux chiffres dans le TXT EmployeurD, sans décaler les champs ni modifier les mappings de comptes existants.
+- Rapproche les TXT consolidés avec les soldes nets par compte du PDF détaillé, en conservant les contrôles des totaux bruts et des écarts réels.
+- Conserve le paquet Windows vérifié et ses empreintes dans les artefacts CI pour permettre son téléchargement.
 
 ## [0.2.1] - 2026-09-09
 

@@ -8,9 +8,9 @@ Une ligne contient 77 caractères, sans compter la fin de ligne.
 
 | Positions | Longueur | Contenu |
 | --- | ---: | --- |
-| 1-8 | 8 | Lot EmployeurD |
-| 9 | 1 | Espace |
-| 10-20 | 11 | Compte GL EmployeurD |
+| 1-8 | 8 | Numéro de compagnie, utilisé comme lot EmployeurD |
+| 9-10 | 2 | Période comptable (PC), alignée à droite : ` 5`, `10`, etc. |
+| 11-20 | 10 | Compte GL |
 | 21-69 | 49 | Montant |
 | 70-77 | 8 | Date, format `AAAAMMJJ` |
 
@@ -19,6 +19,18 @@ Exemple synthétique :
 ```text
 00001234 50213000140                                          2450.0020260618
 ```
+
+Une période comptable à deux chiffres garde exactement les mêmes positions
+(ici PC `15`, compte GL `0213000140`) :
+
+```text
+00001234150213000140                                          2450.0020260618
+```
+
+La position 9 contient l'espace de remplissage ou le chiffre des dizaines de PC.
+Ne pas insérer d'espace dans le fichier : cela décalerait les champs et changerait
+sa longueur. Les deux variantes passent les mêmes contrôles de comptes, montants,
+dates et d'équilibre, ainsi que la relecture du MND généré.
 
 ## MND MégaGest
 
@@ -41,7 +53,11 @@ Les autres positions sont remplies par des espaces.
 
 ## Compte
 
-Par défaut, l'application retire le premier chiffre du compte EmployeurD de 11 chiffres.
+Pour conserver la compatibilité avec les configurations existantes, le « compte
+source » interne de 11 chiffres correspond aux positions 10-20 : unité de PC,
+puis compte GL. Par défaut, l'application retire ce premier chiffre. Les mappings
+`source_to_mnd` existants restent inchangés. La période MND `AAAAMM` est toujours
+dérivée de la date d'écriture, et non de PC.
 
 ```text
 50213000140 -> 0213000140
@@ -60,3 +76,8 @@ L'application y lit:
 - le total compagnie.
 
 Le contrôle compare ensuite les totaux débit/crédit et les montants par compte GL avec le TXT EmployeurD, après conversion du compte source de 11 chiffres vers le compte GL/MND de 10 chiffres.
+
+Si le TXT regroupe des mouvements opposés en un solde net par compte, le contrôle
+compare les soldes nets du PDF, uniquement si chaque compte concorde. Les
+sous-totaux et totaux bruts du PDF restent vérifiés avant ce rapprochement.
+Le rapport signale ce mode de comparaison et conserve les totaux bruts du PDF.
