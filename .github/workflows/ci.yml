@@ -60,6 +60,19 @@ jobs:
           $version = .venv-build/Scripts/python.exe -c "from codamnd.version import __version__; print(__version__)"
           ./scripts/release.ps1 -Version $version
 
+      - name: Conserver le paquet Windows vérifié
+        if: matrix.build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: CodaMND-Windows-${{ github.sha }}
+          path: |
+            dist/CodaMND-v*-portable.zip
+            dist/CodaMND-v*.sha256
+            dist/CodaMND-v*.sbom.json
+            dist/CodaMND-v*.release-notes.md
+          if-no-files-found: error
+          retention-days: 14
+
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
