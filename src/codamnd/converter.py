@@ -8,7 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .config import AppConfig
-from .errors import ErrorDetail, FileOperationError, ValidationFailed
+from .errors import ErrorDetail, FileOperationError, PartialOutputError, ValidationFailed
 from .models import ConversionResult, EmployeurDEntry, MndEntry, ReconciliationResult, ValidationMessage
 from .parser_employeurd import parse_employeurd_bytes, read_employeurd_bytes
 from .parser_mnd import parse_mnd_text
@@ -111,6 +111,9 @@ def validate_file(
     source_bytes: bytes | None = None,
 ) -> ConversionResult:
     reconciliations = reconciliations or []
+    for path in (report_path, validation_json_path):
+        if path is not None:
+            _assert_output_available(path, overwrite=overwrite)
     reconciliation_errors = _reconciliation_error_details(reconciliations)
     if reconciliation_errors:
         result = _failed_result(source_path, None, report_path, validation_json_path, reconciliation_errors, reconciliations)
@@ -174,25 +177,27 @@ def convert_file(
     reconciliations = reconciliations or []
     report_path = (report_path or default_report_path(output_path)) if write_report else None
     validation_json_path = (validation_json_path or default_validation_json_path(output_path)) if write_validation_json else None
+    for path in (output_path, report_path, validation_json_path):
+        if path is not None:
+            _assert_output_available(path, overwrite=overwrite)
     reconciliation_errors = _reconciliation_error_details(reconciliations)
     if reconciliation_errors:
         result = _failed_result(source_path, output_path, report_path, validation_json_path, reconciliation_errors, reconciliations)
-        _write_artifacts(result, overwrite=True)
+        _write_artifacts(result, overwrite=overwrite)
         raise ValidationFailed(reconciliation_errors)
-    _assert_output_available(output_path, overwrite=overwrite)
 
     try:
         draft = build_conversion_draft(source_path, config, period=period, source_bytes=source_bytes)
     except ValidationFailed as error:
         result = _failed_result(source_path, output_path, report_path, validation_json_path, error.errors, reconciliations)
-        _write_artifacts(result, overwrite=True)
+        _write_artifacts(result, overwrite=overwrite)
         raise
 
     all_reconciliations = [_mnd_source_reconciliation(draft, config.validation.debit_credit_tolerance), *reconciliations]
     mnd_reconciliation_errors = _reconciliation_error_details(all_reconciliations[:1])
     if mnd_reconciliation_errors:
         result = _failed_result(source_path, output_path, report_path, validation_json_path, mnd_reconciliation_errors, all_reconciliations)
-        _write_artifacts(result, overwrite=True)
+        _write_artifacts(result, overwrite=overwrite)
         raise ValidationFailed(mnd_reconciliation_errors)
 
     debit, credit = mnd_totals(draft.mnd_entries)
@@ -219,8 +224,10 @@ def convert_file(
         reconciliations=all_reconciliations,
     )
 
-    _write_text_atomic(output_path, draft.mnd_text, encoding=config.mnd.output_encoding, overwrite=overwrite)
-    _write_artifacts(result, overwrite=True)
+    _write_outputs(
+        [(output_path, draft.mnd_text, config.mnd.output_encoding), *_artifact_outputs(result)],
+        overwrite=overwrite,
+    )
     return result
 
 
@@ -269,10 +276,30 @@ def _failed_result(
 
 
 def _write_artifacts(result: ConversionResult, *, overwrite: bool) -> None:
+    _write_outputs(_artifact_outputs(result), overwrite=overwrite)
+
+
+def _artifact_outputs(result: ConversionResult) -> list[tuple[Path, str, str]]:
+    outputs = []
     if result.report_path:
-        _write_text_atomic(result.report_path, build_markdown_report(result), encoding="utf-8", overwrite=overwrite)
+        outputs.append((result.report_path, build_markdown_report(result), "utf-8"))
     if result.validation_json_path:
-        _write_text_atomic(result.validation_json_path, build_validation_json(result), encoding="utf-8", overwrite=overwrite)
+        outputs.append((result.validation_json_path, build_validation_json(result), "utf-8"))
+    return outputs
+
+
+def _write_outputs(outputs: list[tuple[Path, str, str]], *, overwrite: bool) -> None:
+    for path, _, _ in outputs:
+        _assert_output_available(path, overwrite=overwrite)
+    written: list[Path] = []
+    for path, text, encoding in outputs:
+        try:
+            _write_text_atomic(path, text, encoding=encoding, overwrite=overwrite)
+        except FileOperationError as error:
+            if written:
+                raise PartialOutputError(tuple(written), path) from error
+            raise
+        written.append(path)
 
 
 def _source_account_counts(entries: list[EmployeurDEntry]) -> tuple[int, int, int]:
@@ -292,12 +319,14 @@ def _mnd_account_counts(entries: list[MndEntry]) -> tuple[int, int, int]:
 
 
 def _assert_output_available(path: Path, *, overwrite: bool) -> None:
-    if path.exists() and not overwrite:
+    if os.path.lexists(path) and not overwrite:
         raise ValidationFailed([ErrorDetail("output_exists", f"Le fichier de sortie existe déjà: {path}")])
+    if path.is_dir():
+        raise FileOperationError(f"La sortie désigne un dossier, pas un fichier: {path}")
 
 
 def _write_text_atomic(path: Path, text: str, *, encoding: str, overwrite: bool) -> None:
-    if path.exists() and not overwrite:
+    if os.path.lexists(path) and not overwrite:
         raise FileOperationError(f"Le fichier existe déjà: {path}")
     tmp_path: Path | None = None
     try:
@@ -315,7 +344,14 @@ def _write_text_atomic(path: Path, text: str, *, encoding: str, overwrite: bool)
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, path)
+        if overwrite:
+            os.replace(tmp_path, path)
+        elif os.name == "nt":
+            # Sous Windows, rename refuse une destination apparue depuis le contrôle.
+            os.rename(tmp_path, path)
+        else:
+            # Sous POSIX, rename écraserait la destination; link la crée exclusivement.
+            os.link(tmp_path, path)
     except OSError as error:
         raise FileOperationError(f"Impossible d'écrire le fichier: {path}") from error
     finally:
