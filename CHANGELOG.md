@@ -4,6 +4,8 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+- Aligne les environnements de développement et de construction sur setuptools 84.0.0, avec les empreintes de publication vérifiées.
+
 ## [0.2.2] - 2026-10-17
 
 - Protège aussi les rapports Markdown et JSON existants sans remplacement explicite, y compris lorsqu'un fichier apparaît pendant l'écriture.
