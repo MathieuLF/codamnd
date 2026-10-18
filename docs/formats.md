@@ -80,4 +80,5 @@ Le contrôle compare ensuite les totaux débit/crédit et les montants par compt
 Si le TXT regroupe des mouvements opposés en un solde net par compte, le contrôle
 compare les soldes nets du PDF, uniquement si chaque compte concorde. Les
 sous-totaux et totaux bruts du PDF restent vérifiés avant ce rapprochement.
-Le rapport signale ce mode de comparaison et conserve les totaux bruts du PDF.
+L'interface précise que les totaux comparés sont nets par compte. Les rapports
+Markdown et JSON signalent aussi ce mode et conservent les totaux bruts du PDF.
