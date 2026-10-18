@@ -4,11 +4,14 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.3] - 2026-10-17
+
 - Accepte les périodes comptables à deux chiffres dans le TXT EmployeurD sans décaler les champs ni modifier les mappings de comptes existants.
 - Rapproche les TXT consolidés avec les soldes nets par compte du PDF détaillé, tout en vérifiant ses totaux bruts et les écarts réels.
 - Précise le rapprochement net dans l'interface et conserve les causes exactes des rejets du contrôle GL.
 - Conserve le paquet Windows vérifié, ses empreintes et son SBOM dans les artefacts CI.
-
+- Aligne les environnements de développement et de construction sur setuptools 84.0.0, avec les empreintes de publication vérifiées.
+- Actualise CodeQL vers 4.38.2 en conservant le verrouillage de l'action par empreinte de commit.
 ## [0.2.2] - 2026-10-17
 
 - Protège aussi les rapports Markdown et JSON existants sans remplacement explicite, y compris lorsqu'un fichier apparaît pendant l'écriture.
