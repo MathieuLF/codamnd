@@ -47,8 +47,8 @@ def reconcile_gl_detail(
 
     source_debit, source_credit = source_totals(entries)
     report = parse_gl_detail_pdf(report_path)
-    debit_difference = source_debit - report.debit_total
-    credit_difference = source_credit - report.credit_total
+    report_debit = report.debit_total
+    report_credit = report.credit_total
 
     source_batches = sorted({entry.batch for entry in entries})
     source_dates = tuple(sorted({entry.entry_date.isoformat() for entry in entries}))
@@ -64,6 +64,28 @@ def reconcile_gl_detail(
     )
 
     messages = []
+    comparison_basis = "gross"
+    if account_mismatches:
+        # The TXT can consolidate opposite movements on the same GL account.
+        # Accept that representation only if EVERY account/side matches the
+        # net PDF, even when require_account_totals is disabled. The PDF parser
+        # has already verified its original subtotals and gross totals.
+        net_report_totals = _net_account_side_totals(report.account_side_totals)
+        net_mismatches = _account_side_mismatches(
+            source_account_totals, net_report_totals, tolerance=gl_config.tolerance,
+        )
+        if not net_mismatches:
+            comparison_basis = "net_by_account"
+            account_mismatches = []
+            report_debit = sum((amount for (_, side), amount in net_report_totals.items() if side == "debit"), ZERO)
+            report_credit = sum((amount for (_, side), amount in net_report_totals.items() if side == "credit"), ZERO)
+            messages.append(ValidationMessage(
+                "info", "gl_detail_net_by_account",
+                "Le TXT regroupe les mouvements du PDF en un solde net par compte GL; tous les comptes concordent.",
+            ))
+
+    debit_difference = source_debit - report_debit
+    credit_difference = source_credit - report_credit
     if abs(debit_difference) > gl_config.tolerance or abs(credit_difference) > gl_config.tolerance:
         messages.append(
             ValidationMessage(
@@ -105,6 +127,9 @@ def reconcile_gl_detail(
         "line_count": str(report.row_count),
         "subtotal_count": str(report.subtotal_count),
         "account_mismatch_count": str(len(account_mismatches)),
+        "comparison_basis": comparison_basis,
+        "pdf_gross_debit": f"{report.debit_total:.2f}",
+        "pdf_gross_credit": f"{report.credit_total:.2f}",
     }
     for index, mismatch in enumerate(account_mismatches[:MAX_ACCOUNT_MISMATCH_DETAILS], start=1):
         details[f"account_mismatch_{index}"] = mismatch
@@ -117,13 +142,13 @@ def reconcile_gl_detail(
         report_path=report_path,
         source_debit=source_debit,
         source_credit=source_credit,
-        report_debit=report.debit_total,
-        report_credit=report.credit_total,
+        report_debit=report_debit,
+        report_credit=report_credit,
         debit_difference=debit_difference,
         credit_difference=credit_difference,
         tolerance=gl_config.tolerance,
-        debit_label="Total débit du PDF GL",
-        credit_label="Total crédit du PDF GL",
+        debit_label="Total débit net du PDF GL" if comparison_basis == "net_by_account" else "Total débit du PDF GL",
+        credit_label="Total crédit net du PDF GL" if comparison_basis == "net_by_account" else "Total crédit du PDF GL",
         source_batch=source_batch,
         report_batch=None,
         source_period=source_period,
@@ -168,6 +193,17 @@ def _source_account_side_totals(entries: list[EmployeurDEntry], config: AppConfi
         key = (account, side)
         totals[key] = totals.get(key, ZERO) + amount
     return totals
+
+
+def _net_account_side_totals(totals: dict[tuple[str, Side], Decimal]) -> dict[tuple[str, Side], Decimal]:
+    balances: dict[str, Decimal] = {}
+    for (account, side), amount in totals.items():
+        balances[account] = balances.get(account, ZERO) + (amount if side == "debit" else -amount)
+    result: dict[tuple[str, Side], Decimal] = {}
+    for account, balance in balances.items():
+        if balance != ZERO:
+            result[(account, "debit" if balance > ZERO else "credit")] = abs(balance)
+    return result
 
 
 def _account_side_mismatches(

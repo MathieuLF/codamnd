@@ -94,15 +94,18 @@ def parse_employeurd_line(line: str, line_number: int = 1) -> EmployeurDEntry:
         raise ValidationFailed(errors)
 
     batch = line[0:8]
-    separator = line[8:9]
+    period_tens = line[8:9]
     account = line[9:20]
     amount_text = line[20:69].strip()
     date_text = line[69:77]
 
     if not batch.isdigit():
         errors.append(ErrorDetail("source_batch", "Le lot doit contenir 8 chiffres.", line_number, "batch"))
-    if separator != " ":
-        errors.append(ErrorDetail("source_separator", "Un espace est obligatoire après le lot.", line_number))
+    # Positions 9-10 hold the two-character PC field (e.g. " 5" or "10").
+    # Keep the historical 11-character source account, including the PC units:
+    # convert_account removes that first character to recover the 10-digit GL.
+    if period_tens not in " 0123456789":
+        errors.append(ErrorDetail("source_separator", "La position 9 doit contenir un espace ou un chiffre de période comptable.", line_number))
     if len(account) != 11 or not account.isdigit():
         errors.append(ErrorDetail("source_account", "Le compte source doit contenir 11 chiffres.", line_number, "account"))
 

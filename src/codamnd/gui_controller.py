@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import load_app_config
 from .converter import convert_file, validate_file
-from .errors import ValidationFailed
+from .errors import ErrorDetail, ValidationFailed
 from .models import ConversionResult, ReconciliationResult
 from .audit_log import write_audit_event
 from .output_plan import OutputPlan, build_output_plan
@@ -122,9 +122,13 @@ def _build_reconciliations(entries, control_report_path: Path | None, config, re
 def _raise_if_required_reconciliation_failed(reconciliations: list[ReconciliationResult]) -> None:
     for reconciliation in reconciliations:
         if reconciliation_failed(reconciliation):
-            raise ValidationFailed(
-                f"Rapprochement {reconciliation.report_type} en écart: débit={reconciliation.debit_difference:.2f}, crédit={reconciliation.credit_difference:.2f}."
-            )
+            errors = [
+                ErrorDetail(message.code, message.message, message.line_number, message.field)
+                for message in reconciliation.messages if message.severity == "error"
+            ]
+            raise ValidationFailed(errors or [ErrorDetail(
+                "reconciliation_failed", f"Rapprochement {reconciliation.report_type} en écart.",
+            )])
 
 
 def _audit(config, event: str, status: str, details: dict) -> None:

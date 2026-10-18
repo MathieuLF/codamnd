@@ -232,10 +232,14 @@ def _format_money(value: Decimal) -> str:
 def _reconciliation_metrics(reconciliation: ReconciliationResult) -> list[ResultMetric]:
     status = "concordant" if reconciliation.status == "success" else "en écart"
     if reconciliation.report_type == "GL_DETAIL":
+        totals_label = (
+            "totaux nets par compte" if reconciliation.details.get("comparison_basis") == "net_by_account"
+            else "totaux comparés"
+        )
         metrics = [
             ResultMetric(
                 "Rapport GL",
-                f"{status.capitalize()} - totaux comparés débit {_format_money(reconciliation.report_debit)} / crédit {_format_money(reconciliation.report_credit)}",
+                f"{status.capitalize()} - {totals_label} débit {_format_money(reconciliation.report_debit)} / crédit {_format_money(reconciliation.report_credit)}",
             ),
             ResultMetric(
                 "Écart GL",

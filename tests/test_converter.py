@@ -10,6 +10,7 @@ import subprocess
 import urllib.error
 import zipfile
 from datetime import date, datetime
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -530,6 +531,65 @@ class CodaMNDTest(unittest.TestCase):
 
         self.assertEqual(reconciliation.status, "failed")
         self.assertIn("gl_detail_date_missing", [message.code for message in reconciliation.messages])
+
+    def test_reconcile_consolidated_source_against_detailed_pdf(self) -> None:
+        config = self.config()
+        debit = parse_employeurd_line("00001234150213000140" + "125.25".rjust(49) + "20260618")
+        credit = replace(debit, account="55411200000", amount=Decimal("-125.25"))
+        source = [debit, credit]
+        # The PDF has 25.00 of opposite movements on the credit account.
+        detail = [debit, replace(credit, amount=Decimal("-150.25")), replace(credit, amount=Decimal("25.00"))]
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "synthetic.pdf"
+            _write_synthetic_gl_detail_pdf(report, detail, config)
+            result = reconcile_gl_detail(source, report, config, required=True)
+            self.assertEqual(result.status, "success")
+            self.assertEqual(result.report_debit, Decimal("125.25"))
+            self.assertEqual(result.report_credit, Decimal("125.25"))
+            self.assertEqual(result.debit_difference, Decimal("0.00"))
+            self.assertEqual(result.credit_difference, Decimal("0.00"))
+            self.assertEqual(result.details["comparison_basis"], "net_by_account")
+            self.assertEqual(result.details["pdf_gross_debit"], "150.25")
+            self.assertEqual(result.details["pdf_gross_credit"], "150.25")
+            self.assertEqual(result.details["account_mismatch_count"], "0")
+            output = Path(directory) / "output.mnd"
+            convert_file(Path(directory) / "source.txt", output, config, source_bytes=(debit.raw_line + "\r\n" +
+                "00001234155411200000" + "-125.25".rjust(49) + "20260618\r\n").encode("ascii"), reconciliations=[result])
+            self.assertEqual(len(parse_mnd_file(output)), 2)
+
+            # Gross source data still compares directly without netting.
+            gross_result = reconcile_gl_detail(detail, report, config, required=True)
+            self.assertEqual(gross_result.status, "success")
+            self.assertEqual(gross_result.details["comparison_basis"], "gross")
+
+    def test_net_reconciliation_cannot_hide_wrong_accounts_or_dates(self) -> None:
+        config = self.config()
+        debit = parse_employeurd_line("00001234150213000140" + "125.25".rjust(49) + "20260618")
+        credit = replace(debit, account="55411200000", amount=Decimal("-125.25"))
+        detail = [debit, replace(credit, amount=Decimal("-150.25")), replace(credit, amount=Decimal("25.00"))]
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "synthetic.pdf"
+            _write_synthetic_gl_detail_pdf(report, detail, config)
+            wrong_account = reconcile_gl_detail([replace(debit, account="50213000200"), credit], report, config, required=True)
+            self.assertEqual(wrong_account.status, "failed")
+            self.assertEqual(wrong_account.details["comparison_basis"], "gross")
+            wrong_date = reconcile_gl_detail([replace(entry, entry_date=date(2026, 6, 19)) for entry in (debit, credit)], report, config, required=True)
+            self.assertEqual(wrong_date.status, "failed")
+            self.assertIn("gl_detail_date_mismatch", [message.code for message in wrong_date.messages])
+            wrong_amount = reconcile_gl_detail([replace(debit, amount=Decimal("124.25")), replace(credit, amount=Decimal("-124.25"))], report, config, required=True)
+            self.assertEqual(wrong_amount.status, "failed")
+            self.assertEqual(wrong_amount.details["comparison_basis"], "gross")
+
+            # The fallback must check every account even in totals-only mode.
+            config = replace(config, reports=replace(config.reports, gl_detail=replace(config.reports.gl_detail, require_account_totals=False)))
+            unchecked_accounts = reconcile_gl_detail([replace(debit, account="50213000200"), credit], report, config, required=True)
+            self.assertEqual(unchecked_accounts.status, "failed")
+            self.assertEqual(unchecked_accounts.details["comparison_basis"], "gross")
+
+            # A PDF whose printed totals disagree with its rows is still invalid.
+            report.write_bytes(report.read_bytes().replace(b"150.25", b"151.25"))
+            with self.assertRaises(ValidationFailed):
+                reconcile_gl_detail([debit, credit], report, config, required=True)
 
     def test_reconcile_gl_detail_detects_account_mismatch(self) -> None:
         root = Path(__file__).resolve().parents[1]
