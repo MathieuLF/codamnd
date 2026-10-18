@@ -61,3 +61,7 @@ Guide complet : [docs/developpement.md](docs/developpement.md).
 - Ne pas publier de release, créer de tag, pousser sur `main` ou soumettre à VirusTotal sans demande explicite.
 - Utiliser des noms de branche qui décrivent le changement.
 - Pour une revue de code, prioriser les bogues, régressions, risques de publication et tests manquants.
+
+## Profil quotidien de développement
+
+Utiliser `python scripts/agent_validate.py --profile dev` pour la boucle légère après setup. Voir les profils du README pour la couverture exacte. Ce résultat est partiel : sélectionner les intégrations et navigateurs selon les chemins modifiés, puis utiliser les contrôles complets existants pour leur qualification. Les commandes et exigences Full/release restent inchangées. Ne jamais présenter le profil développement comme une certification complète ni lancer une publication automatiquement.

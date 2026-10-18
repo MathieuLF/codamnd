@@ -80,3 +80,19 @@ Linux, l'architecture, la configuration, les builds Windows et le dépannage.
 ## Licence
 
 CodaMND est distribué sous licence MIT. EmployeurD, PG Solutions, MégaGest et les autres marques citées appartiennent à leurs propriétaires respectifs.
+
+## Profils de validation pour le développement
+
+Après le setup, utiliser le profil développement pendant les itérations. Les commandes historiques gardent leur comportement et les contrôles restent manuels.
+
+| Profil | Commande depuis la racine |
+| --- | --- |
+| Développement | `python scripts/agent_validate.py --profile dev` |
+| Validation complète existante | `python scripts/agent_validate.py --profile complete` |
+| Release | Parcours Windows de packaging/publication documenté |
+
+Dépendances, lint, types, tous les tests unitaires et compilation. Seul l’audit de préparation de release est réservé au profil complete; aucun packaging Windows ni secret VirusTotal en développement.
+
+Le succès du profil développement prouve uniquement ce périmètre. Pour un changement de conversion ou de rapprochement GL, vérifier les parcours concernés avec les TXT et PDF synthétiques. Pour l’interface Tkinter, lancer `python scripts/smoke_gui.py`, puis vérifier la sélection des fichiers, la validation, la génération et l’ouverture de la sortie. Sous Linux, utiliser Xvfb pour le contrôle graphique. Les parcours navigateur concernent uniquement le microsite.
+
+Avant de terminer un changement, exécuter le profil `complete`. Les exigences de publication restent inchangées et aucune publication n’est automatique. Après une modification de verrou de dépendances, relancer le setup; le profil développement ne le remplace pas.

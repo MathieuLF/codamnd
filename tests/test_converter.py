@@ -328,7 +328,7 @@ class CodaMNDTest(unittest.TestCase):
             output = Path(directory) / "sortie.mnd"
             with patch("codamnd.converter.os.replace", side_effect=OSError("échec simulé")):
                 with self.assertRaises(FileOperationError):
-                    _write_text_atomic(output, "contenu", encoding="utf-8", overwrite=False)
+                    _write_text_atomic(output, "contenu", encoding="utf-8", overwrite=True)
 
             self.assertFalse(output.exists())
             self.assertEqual(list(Path(directory).glob(".sortie.mnd.*.tmp")), [])

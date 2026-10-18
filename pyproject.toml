@@ -1,6 +1,6 @@
 [project]
 name = "codamnd"
-version = "0.2.1"
+version = "0.2.2"
 description = "Outil Windows local pour crÃ©er un fichier MND pour MÃ©gaGest Ã  partir d'une Ã©criture dÃ©taillÃ©e EmployeurD (TXT), avec contrÃ´le des soldes et rapports de validation."
 requires-python = ">=3.12"
 license = "MIT"

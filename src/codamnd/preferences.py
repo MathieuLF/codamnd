@@ -46,13 +46,13 @@ def load_preferences(path: Path | None = None, *, default_update_check_on_startu
         data = json.loads(target.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return AppPreferences(update_check_on_startup=default_update_check_on_startup)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return AppPreferences()
     if not isinstance(data, dict):
         return AppPreferences()
     return AppPreferences(
         output_dir=_clean_string(data.get("output_dir", "")),
-        update_check_on_startup=bool(data.get("update_check_on_startup", False)),
+        update_check_on_startup=data.get("update_check_on_startup") is True,
     )
 
 

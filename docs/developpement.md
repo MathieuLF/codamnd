@@ -66,6 +66,9 @@ codamnd-gui
 
 `python convert.py` et `python -m codamnd` sont également des entrées CLI.
 La conversion écrit un MND, un rapport Markdown et un JSON; ils restent locaux.
+Les trois sorties sont protégées contre l’écrasement. L’option `--overwrite`
+autorise leur remplacement explicite. Si une écriture échoue en cours de route,
+la CLI retourne une erreur fichier et liste les sorties déjà écrites et conservées.
 Le PDF GL est facultatif : ajouter `--gl-detail <PDF>` et `--require-gl-detail`
 pour exiger un rapprochement réussi. Utiliser seulement des données synthétiques
 dans l'environnement Cloud, les tests et les captures partagées.
@@ -81,6 +84,11 @@ LOCALAPPDATA/CodaMND/logs ou ~/.codamnd/logs; `audit_log.directory` permet un do
 La vérification au démarrage est désactivée par défaut dans `config/app.yml`.
 
 ## Vérification d'un changement
+
+Pendant les itérations, `python scripts/agent_validate.py --profile dev` exécute
+les dépendances, le lint, le typecheck ciblé, tous les tests et la compilation.
+Il omet uniquement l’audit local de préparation de release. Terminer le changement
+avec le profil complet, qui reste le comportement par défaut :
 
 ```bash
 python scripts/agent_validate.py
@@ -109,6 +117,13 @@ Contrôle de lancement GUI sous Windows : `python scripts/smoke_gui.py`.
 Sous Linux : installer `xvfb`, puis `xvfb-run -a python scripts/smoke_gui.py`.
 Ce contrôle construit la fenêtre et les widgets puis les ferme avec des préférences
 temporaires. Il ne remplace pas une vérification manuelle des interactions.
+
+Pour la conversion et le rapprochement GL, vérifier les parcours avec des TXT et
+PDF synthétiques, y compris le refus des écritures déséquilibrées et des écarts
+GL bloquants. Pour l’interface, vérifier la sélection, la validation, la génération
+et l’ouverture de la sortie. Les contrôles navigateur concernent le microsite,
+pas l’application Tkinter. La validation complète ne publie aucun artefact et ne
+remplace pas les contrôles du paquet Windows avant une publication.
 
 La CI utilise ces commandes sur Windows/Python 3.12 et 3.14 et Linux/Python 3.12,
 construit le paquet Windows en 3.14 et recherche les secrets avec Gitleaks.
