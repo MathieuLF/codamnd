@@ -76,7 +76,7 @@ def build_file_preview(value: str, *, label: str, suffixes: tuple[str, ...], opt
         if not path.is_file():
             return FilePreview(path, "Invalide", f"{label}: le chemin sélectionné n'est pas un fichier.", "error", False)
         if suffixes and path.suffix.lower() not in suffixes:
-            return FilePreview(path, "Format invalide", f"{path.name} - extension inattendue.", "error", False)
+            return FilePreview(path, "Format invalide", f"{label}: {path.name} - extension inattendue.", "error", False)
         stat = path.stat()
     except (OSError, ValueError):
         return FilePreview(path, "Inaccessible", f"{label}: impossible de lire ce chemin.", "error", False)
@@ -193,12 +193,12 @@ def generated_files(result: ConversionResult | None) -> tuple[Path, ...]:
 
 
 def _directory_probably_writable(path: Path) -> bool:
-    target = path if path.exists() else path.parent
-    if not target:
-        return False
-    if not target.exists():
-        return False
-    return os.access(target, os.W_OK)
+    target = path
+    while not target.exists():
+        if target.is_symlink() or target.parent == target:
+            return False
+        target = target.parent
+    return target.is_dir() and os.access(target, os.W_OK)
 
 
 def _source_identity(path: Path):

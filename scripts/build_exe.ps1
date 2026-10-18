@@ -1,6 +1,6 @@
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version = "0.2.1",
+    [string]$Version = "",
     [string]$Python = "python"
 )
 
@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path -LiteralPath "$PSScriptRoot/..").Path
 Set-Location -LiteralPath $RepoRoot
 $AppVersion = & $Python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+if (-not $Version -and $LASTEXITCODE -eq 0) { $Version = $AppVersion.Trim() }
 if ($LASTEXITCODE -ne 0 -or $AppVersion.Trim() -ne $Version) {
     throw "La version demandée ne correspond pas au code source."
 }

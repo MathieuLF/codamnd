@@ -4,35 +4,72 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - name: Installer le projet
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
-      - name: Run tests
-        run: python -m unittest discover -s tests
-      - name: Compile
-        run: python -X pycache_prefix=build/pycache -m compileall src
-
-  native-package:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python: "3.12"
+            build: false
+          - os: windows-latest
+            python: "3.14.7"
+            build: true
+          - os: ubuntu-24.04
+            python: "3.12"
+            build: false
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Installer Tk et l'affichage de test Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14.7"
-      - name: Construire et valider le vrai paquet portable
+          python-version: ${{ matrix.python }}
+      - name: Installer les dÃ©pendances verrouillÃ©es
+        if: ${{ !matrix.build }}
+        run: python scripts/setup_dev.py
+      - name: Installer le profil de validation du build Windows
+        if: matrix.build
+        run: python scripts/setup_dev.py --build
+      - name: Valider Windows
+        if: runner.os == 'Windows'
+        env:
+          VALIDATION_PYTHON: ${{ matrix.build && '.venv-build/Scripts/python.exe' || '.venv/Scripts/python.exe' }}
+        run: |
+          & $env:VALIDATION_PYTHON scripts/agent_validate.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:VALIDATION_PYTHON scripts/smoke_gui.py
+      - name: Valider Linux
+        if: runner.os == 'Linux'
+        run: |
+          .venv/bin/python scripts/agent_validate.py
+          xvfb-run -a .venv/bin/python scripts/smoke_gui.py
+      - name: Construire le paquet Windows sans publier
+        if: matrix.build
         shell: pwsh
         run: |
-          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-          .\scripts\release.ps1 -Version $version.Trim()
+          $version = .venv-build/Scripts/python.exe -c "from codamnd.version import __version__; print(__version__)"
+          ./scripts/release.ps1 -Version $version
+
+  secrets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: VÃ©rifier les secrets dans l'historique disponible
+        run: >-
+          docker run --rm --network none
+          -v "$GITHUB_WORKSPACE:/repo:ro"
+          ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git /repo --redact --no-banner --log-opts=--all

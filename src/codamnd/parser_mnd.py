@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -137,7 +137,7 @@ def parse_mnd_line(line: str, line_number: int = 1) -> MndEntry:
     )
 
 
-def _parse_date(value: str, field: str, line_number: int, errors: list[ErrorDetail]):
+def _parse_date(value: str, field: str, line_number: int, errors: list[ErrorDetail]) -> date | None:
     if len(value) != 8 or not value.isdigit():
         errors.append(ErrorDetail("mnd_date_format", "La date doit être AAAAMMJJ.", line_number, field))
         return None

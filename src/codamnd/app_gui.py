@@ -13,10 +13,12 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .config import load_app_config
-from .errors import ConfigurationError, ConversionError, ValidationFailed
+from .errors import ConfigurationError, ConversionError, PartialOutputError, ValidationFailed
 from .gui_controller import GuiController, GuiOperationResult
 from .gui_dialogs import show_legal_notice, show_report_preview, show_security_window, show_support_window
 from .gui_state import (
+    FilePreview,
+    OutputPreview,
     build_file_preview,
     build_output_preview,
     default_output_root,
@@ -444,12 +446,13 @@ class ScrollableFrame(ttk.Frame):
 
 class CodaMNDApp(tk.Tk):
     def __init__(self) -> None:
+        app_config = load_app_config(default_config_dir())
         super().__init__()
         self.title(f"CodaMND {__version__}")
         self._set_initial_geometry()
         self._set_product_icon()
 
-        self.app_config = load_app_config(default_config_dir())
+        self.app_config = app_config
         self.controller = GuiController(config_dir=default_config_dir())
         try:
             ensure_preferences_dir()
@@ -749,6 +752,8 @@ class CodaMNDApp(tk.Tk):
         self.bind_all("<F5>", lambda _event: self._check_update(silent=False))
 
     def _choose_source(self) -> None:
+        if self.busy:
+            return
         selected = filedialog.askopenfilename(
             title="Choisir l'écriture détaillée standard EmployeurD",
             filetypes=[("Fichiers texte", "*.txt *.TXT"), ("Tous les fichiers", "*.*")],
@@ -758,6 +763,8 @@ class CodaMNDApp(tk.Tk):
             self._log_event(f"Écriture sélectionnée : {Path(selected).name}")
 
     def _choose_control_report(self) -> None:
+        if self.busy:
+            return
         selected = filedialog.askopenfilename(
             title="Choisir le rapport de contrôle",
             filetypes=[
@@ -772,12 +779,16 @@ class CodaMNDApp(tk.Tk):
             self._refresh_all()
 
     def _clear_control_report(self) -> None:
+        if self.busy:
+            return
         self.control_report_path.set("")
         self.require_control_report.set(False)
         self._log_event("Rapport de contrôle retiré.")
         self._mark_dirty()
 
     def _choose_output_dir(self) -> None:
+        if self.busy:
+            return
         initial_dir = self.output_dir.get().strip() or str(default_output_root())
         selected = filedialog.askdirectory(title="Choisir un dossier de sortie", initialdir=initial_dir)
         if selected:
@@ -895,7 +906,7 @@ class CodaMNDApp(tk.Tk):
         self._task_on_success = None
         self._task_inputs = None
         self.progress.stop()
-        if inputs_changed:
+        if inputs_changed and not isinstance(error, PartialOutputError):
             self.last_result = None
             self.last_error = None
             self._clear_payroll_summaries()
@@ -927,15 +938,25 @@ class CodaMNDApp(tk.Tk):
         self.last_result = None
         self.last_error = error
         self._clear_payroll_summaries()
-        self.status.set("À corriger")
-        self.status_detail.set("Aucun MND ne sera créé tant que le problème n'est pas réglé.")
-        self._log_event("Problème à corriger. Création du MND désactivée.")
+        if isinstance(error, PartialOutputError):
+            title = "Création incomplète"
+            self.status.set(title)
+            self.status_detail.set("Des fichiers ont été écrits. Cliquez sur Ouvrir la sortie pour les retrouver.")
+            self._log_event("Création incomplète. Les fichiers déjà écrits sont conservés.")
+        else:
+            title = "À corriger avant de créer le MND"
+            self.status.set("À corriger")
+            self.status_detail.set("Aucun MND ne sera créé tant que le problème n'est pas réglé.")
+            self._log_event("Problème à corriger. Création du MND désactivée.")
         messagebox.showerror(
-            "À corriger avant de créer le MND",
+            title,
             f"{friendly_error_message(error)}\n\nCodes non confidentiels à transmettre au support:\n{technical_error_message(error)}",
         )
 
     def _open_folder(self) -> None:
+        if isinstance(self.last_error, PartialOutputError) and self.last_error.written_paths:
+            open_folder(self.last_error.written_paths[0])
+            return
         if self.last_result and self.last_result.conversion:
             files = generated_files(self.last_result.conversion)
             if files:
@@ -1063,19 +1084,8 @@ class CodaMNDApp(tk.Tk):
         self._refresh_all()
 
     def _refresh_all(self) -> None:
-        source_preview = build_file_preview(self.source_path.get(), label="EmployeurD", suffixes=(".txt",), optional=False)
-        report_preview = build_file_preview(
-            self.control_report_path.get(),
-            label="Rapport de contrôle",
-            suffixes=(".pdf",),
-            optional=True,
-        )
-        output_preview = build_output_preview(
-            self.source_path.get(),
-            self.output_dir.get(),
-            include_report=self.write_report_md.get(),
-            include_validation_json=self.write_validation_json.get(),
-        )
+        previews = self._build_input_previews()
+        source_preview, report_preview, output_preview = previews
 
         _set_optional_label(self.source_meta, _file_preview_text(source_preview))
         _set_optional_label(self.control_report_meta, _file_preview_text(report_preview))
@@ -1095,13 +1105,17 @@ class CodaMNDApp(tk.Tk):
             self.require_control_report_check.state(["disabled", "!locked"])
         self.clear_control_report_button.state(["!disabled"] if has_control_report and not self.busy else ["disabled"])
 
-        can_validate = self._can_validate()
-        can_generate = self._can_generate()
+        can_validate = self._can_validate(previews)
+        can_generate = self._can_generate(previews)
         self.validate_button.state(["!disabled"] if can_validate else ["disabled"])
         self.generate_button.state(["!disabled"] if can_generate else ["disabled"])
         self.validate_button.configure(style="Action.TButton" if can_generate else "Primary.TButton")
         self.generate_button.configure(style="Primary.TButton" if can_generate else "Action.TButton")
-        folder_available = bool(generated_files(self.last_result.conversion) if self.last_result and self.last_result.conversion else False) or self._resolved_output_root().exists()
+        folder_available = (
+            bool(generated_files(self.last_result.conversion) if self.last_result and self.last_result.conversion else False)
+            or isinstance(self.last_error, PartialOutputError)
+            or self._resolved_output_root().exists()
+        )
         self.folder_button.state(["!disabled"] if folder_available and not self.busy else ["disabled"])
         summary_available = bool(self.last_result and self.last_result.conversion)
         self.summary_button.state(["!disabled"] if summary_available and not self.busy else ["disabled"])
@@ -1123,7 +1137,7 @@ class CodaMNDApp(tk.Tk):
             text=_validation_mode_text(has_control_report, self.require_control_report.get(), _control_report_kind(self.control_report_path.get())),
             style=_validation_mode_style(has_control_report, self.require_control_report.get()),
         )
-        self.disabled_reason.set(self._disabled_reason(can_validate, can_generate))
+        self.disabled_reason.set(self._disabled_reason(can_validate, can_generate, previews))
         self._refresh_dashboard()
         self._refresh_status_badge()
 
@@ -1134,6 +1148,8 @@ class CodaMNDApp(tk.Tk):
     def _refresh_status_badge(self) -> None:
         if self.busy:
             label, status, icon = "Paie en cours", "warning", "warning"
+        elif isinstance(self.last_error, PartialOutputError):
+            label, status, icon = "Création incomplète", "warning", "warning"
         elif self.last_error:
             label, status, icon = "Paie à corriger", "error", "error"
         elif self.last_result and self.last_result.conversion and self.last_result.conversion.output_path:
@@ -1180,13 +1196,12 @@ class CodaMNDApp(tk.Tk):
         self.geometry(f"{width}x{height}+{x}+{y}")
         self.minsize(min(960, width), min(640, height))
 
-    def _can_validate(self) -> bool:
-        if self.busy:
-            return False
-        source = build_file_preview(self.source_path.get(), label="EmployeurD", suffixes=(".txt",), optional=False)
+    def _build_input_previews(self) -> tuple[FilePreview, FilePreview, OutputPreview]:
+        # Ces aperçus ne vivent que le temps d'un rafraîchissement ou d'une action.
+        source = build_file_preview(self.source_path.get(), label="TXT EmployeurD", suffixes=(".txt",), optional=False)
         report = build_file_preview(
             self.control_report_path.get(),
-            label="Rapport GL",
+            label="PDF GL",
             suffixes=(".pdf",),
             optional=True,
         )
@@ -1196,18 +1211,34 @@ class CodaMNDApp(tk.Tk):
             include_report=self.write_report_md.get(),
             include_validation_json=self.write_validation_json.get(),
         )
+        return source, report, output
+
+    def _can_validate(self, previews: tuple[FilePreview, FilePreview, OutputPreview] | None = None) -> bool:
+        if self.busy:
+            return False
+        source, report, output = previews if previews is not None else self._build_input_previews()
         return source.ok and report.ok and output.ok
 
-    def _can_generate(self) -> bool:
-        return bool(self._can_validate() and self.last_result and self.last_result.ok)
+    def _can_generate(self, previews: tuple[FilePreview, FilePreview, OutputPreview] | None = None) -> bool:
+        return bool(self._can_validate(previews) and self.last_result and self.last_result.ok)
 
-    def _disabled_reason(self, can_validate: bool, can_generate: bool) -> str:
+    def _disabled_reason(
+        self,
+        can_validate: bool,
+        can_generate: bool,
+        previews: tuple[FilePreview, FilePreview, OutputPreview],
+    ) -> str:
         if self.busy:
             return "Une opération locale est en cours."
         if not can_validate:
             if not self.source_path.get().strip():
                 return "Ajoutez d'abord l'écriture EmployeurD."
-            return "Corrigez les choix avant de vérifier."
+            source, report, output = previews
+            if not source.ok:
+                return source.detail
+            if not report.ok:
+                return report.detail
+            return f"Destination : {output.detail}"
         if not can_generate:
             return "Le MND sera disponible après une vérification réussie."
         return "Prêt à créer le fichier MND."
@@ -1633,7 +1664,16 @@ def _set_text(widget: tk.Text, value: str) -> None:
 
 
 def main() -> int:
-    app = CodaMNDApp()
+    try:
+        app = CodaMNDApp()
+    except ConfigurationError as error:
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            messagebox.showerror("Configuration à corriger", str(error), parent=root)
+        finally:
+            root.destroy()
+        return 2
     app.mainloop()
     return 0
 

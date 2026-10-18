@@ -1,0 +1,9 @@
+# Outils de validation et leurs dépendances; pas de packager Windows.
+ast-serialize==0.12.0
+librt==0.16.0
+mypy==2.4.0
+mypy_extensions==1.1.0
+packaging==26.3
+pathspec==1.1.1
+ruff==0.16.10
+typing_extensions==4.16.0

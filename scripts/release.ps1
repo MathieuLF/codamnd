@@ -1,9 +1,14 @@
 param(
-    [string]$Version = "0.1.0",
+    [string]$Version = "",
     [switch]$AllowDirty
 )
 
 $ErrorActionPreference = "Stop"
+Set-Location -LiteralPath (Resolve-Path -LiteralPath "$PSScriptRoot/..").Path
+if (-not $Version) {
+    $Version = (python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Version du projet introuvable." }
+}
 
 $ReleasePythonVersion = python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
 if ($LASTEXITCODE -ne 0 -or $ReleasePythonVersion.Trim() -ne "3.14") {

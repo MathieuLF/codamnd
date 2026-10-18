@@ -17,6 +17,7 @@ from .reconciliation import reconcile_gl_detail, reconciliation_failed
 from .update_check import check_for_update
 from .validator import mnd_totals, validate_source_entries
 from .version import __version__
+from .resource_paths import default_config_dir
 
 
 EXIT_OK = 0
@@ -31,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Convertit un fichier TXT EmployeurD en fichier MND MégaGest.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("--config-dir", type=Path, default=Path("config"), help="Dossier de configuration avancée.")
+    parser.add_argument("--config-dir", type=Path, default=default_config_dir(), help="Dossier de configuration avancée.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser("inspect-source", help="Résume un fichier EmployeurD sans produire de MND.")
@@ -215,6 +216,9 @@ def _print_result(row_count: int, debit, credit, period: str | None, batch: str 
 
 
 def _run_self_tests() -> int:
+    if not Path("tests").is_dir():
+        print("Les tests nécessitent le dépôt source et son dossier tests.", file=sys.stderr)
+        return EXIT_USAGE
     suite = unittest.defaultTestLoader.discover("tests")
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return EXIT_OK if result.wasSuccessful() else EXIT_VALIDATION
