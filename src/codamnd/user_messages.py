@@ -17,7 +17,6 @@ FRIENDLY_MESSAGES = {
     "gl_detail_subtotal_mismatch": "Un sous-total du PDF GL ne concorde pas avec ses lignes.",
     "gl_detail_total_mismatch": "Le total du PDF GL ne concorde pas avec ses lignes.",
     "gl_detail_empty": "Le PDF GL ne contient aucune ligne lisible. Utilisez le PDF original généré par EmployeurD, non scanné ni altéré.",
-    "validation_failed": "La validation ne peut pas continuer avec les options actuelles.",
 }
 
 

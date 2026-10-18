@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,19 @@ class ConfigurationError(ConversionError):
 
 class FileOperationError(ConversionError):
     """Raised when a file cannot be read or written safely."""
+
+
+class PartialOutputError(FileOperationError):
+    """An output failed after other requested files were successfully written."""
+
+    def __init__(self, written_paths: tuple[Path, ...], failed_path: Path) -> None:
+        self.written_paths = written_paths
+        self.failed_path = failed_path
+        written = "\n".join(f"- {path}" for path in written_paths)
+        super().__init__(
+            f"Création incomplète. Impossible d'écrire : {failed_path}\n\n"
+            f"Fichiers déjà écrits et conservés :\n{written}"
+        )
 
 
 class ValidationFailed(ConversionError):

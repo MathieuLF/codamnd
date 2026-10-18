@@ -4,13 +4,23 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.2] - 2026-10-17
+
+- Protège aussi les rapports Markdown et JSON existants sans remplacement explicite, y compris lorsqu'un fichier apparaît pendant l'écriture.
+- Signale les créations incomplètes et permet de retrouver les fichiers déjà écrits sans annoncer une réussite complète.
+- Bloque les changements de fichiers pendant un traitement, y compris le raccourci Ctrl+O.
+- Affiche une erreur lisible pour une configuration YAML invalide, y compris au démarrage.
+- Accepte les destinations comportant plusieurs nouveaux sous-dossiers lorsque leur dossier parent est accessible.
+- Tolère les préférences mal encodées et exige un booléen explicite pour vérifier les mises à jour au démarrage.
+- Affiche la cause précise des erreurs de validation et indique le fichier ou la destination à corriger.
+- Réutilise les prévisualisations pendant chaque rafraîchissement pour réduire les relectures du TXT.
+- Précise les raccourcis, les sorties facultatives, le contrôle GL et les parcours de validation Tkinter.
 - Ajoute un setup de développement avec dépendances verrouillées et des consignes pour Linux et les environnements distants.
 - Réunit lint, vérification de types ciblée, tests, compilation et audit local dans la commande de validation.
 - Vérifie Linux et les runtimes Windows de revue et de build en CI, avec un contrôle de lancement graphique et Gitleaks.
 - Inclut les configurations par défaut dans le paquet Python et permet à la CLI de fonctionner hors du dépôt.
 - Corrige un test de chemin dépendant de Windows et couvre les parcours CLI avec des données synthétiques.
 - Renforce la concordance version, tag et commit avant publication.
-
 ## [0.2.1] - 2026-09-09
 
 - Utilise un lanceur Windows propre à CodaMND, avec son runtime privé, sans changer les règles de conversion.

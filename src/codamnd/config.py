@@ -131,7 +131,7 @@ def _load_reports_config(data: dict[str, Any]) -> ReportsConfig:
 def _load_config_file(path: Path) -> dict[str, Any]:
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         raise ConfigurationError(f"Impossible de lire la configuration: {path}") from error
 
     try:
@@ -147,10 +147,15 @@ def _load_config_file(path: Path) -> dict[str, Any]:
 def _parse_yaml(text: str) -> Any:
     try:
         import yaml  # type: ignore[import-not-found]
-
-        return yaml.safe_load(text) or {}
     except ModuleNotFoundError:
         pass
+    else:
+        try:
+            return yaml.safe_load(text) or {}
+        except yaml.YAMLError as error:
+            mark = getattr(error, "problem_mark", None)
+            location = f" (ligne {mark.line + 1}, colonne {mark.column + 1})" if mark else ""
+            raise ValueError(f"syntaxe YAML invalide{location}") from error
 
     stripped = text.lstrip()
     if stripped.startswith("{") or stripped.startswith("["):
