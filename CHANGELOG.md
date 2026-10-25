@@ -4,6 +4,12 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.4] - 2026-10-25
+
+- Aligne Pillow 13.0.0 et setuptools 84.1.0 entre les environnements de développement, de construction et de publication.
+- Synchronise les dépendances applicatives et leurs empreintes de publication, y compris charset-normalizer et cryptography.
+- Détecte automatiquement les écarts de versions entre les profils de dépendances.
+
 ## [0.2.3] - 2026-10-17
 
 - Accepte les périodes comptables à deux chiffres dans le TXT EmployeurD sans décaler les champs ni modifier les mappings de comptes existants.

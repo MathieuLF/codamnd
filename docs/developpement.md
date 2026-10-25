@@ -156,7 +156,21 @@ La construction refuse les artefacts précédents dans `dist/`; les archiver ava
 
 Le paquet Windows utilise le lanceur natif CodaMND, CPython privé et Zig, avec
 provenance et empreintes vérifiées. Voir `packaging/windows/native/README.md`.
-Le backend de construction et le verrou de publication utilisent setuptools 83.0.0.
+Le backend de construction et les profils de développement, de build et de publication
+utilisent la même version de setuptools, épinglée dans `pyproject.toml`.
+`requirements-release.in` inclut `requirements-runtime.txt` pour conserver les mêmes
+versions applicatives. Après une mise à jour, synchroniser `requirements-release.txt`
+avec les empreintes SHA-256 des distributions officielles PyPI, puis vérifier son
+installation dans un environnement neuf avec Python 3.14 sous Windows :
+
+```powershell
+python -m venv build/verification-release
+build/verification-release/Scripts/python.exe -m pip install --require-hashes -r requirements-release.txt
+build/verification-release/Scripts/python.exe -m pip check
+```
+
+La suite de tests vérifie la concordance des versions entre les profils, le backend
+et le verrou de publication. Elle ne remplace pas le build et les essais du paquet Windows.
 `release.ps1` crée un environnement neuf avec les dépendances à empreintes et
 valide le véritable paquet portable avant de produire le SBOM. Celui-ci vérifie
 l'inventaire des fichiers et distingue les composants embarqués des outils exclus.

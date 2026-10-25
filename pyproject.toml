@@ -1,6 +1,6 @@
 [project]
 name = "codamnd"
-version = "0.2.3"
+version = "0.2.4"
 description = "Outil Windows local pour crÃ©er un fichier MND pour MÃ©gaGest Ã  partir d'une Ã©criture dÃ©taillÃ©e EmployeurD (TXT), avec contrÃ´le des soldes et rapports de validation."
 requires-python = ">=3.12"
 license = "MIT"
@@ -11,7 +11,7 @@ build = ["packaging==26.3"]
 dev = ["ruff==0.16.10", "mypy==2.4.0"]
 
 [build-system]
-requires = ["setuptools==84.0.0"]
+requires = ["setuptools==84.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
