@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from packaging.requirements import Requirement
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +110,34 @@ class DevelopmentTest(unittest.TestCase):
         names = set(generate_sbom._locked_package_names(ROOT / "requirements-release.txt"))
         self.assertTrue({"pdfplumber", "pdfminer-six", "pillow", "pypdfium2", "cryptography"} <= names)
         self.assertTrue({"ruff", "mypy", "cx-freeze"}.isdisjoint(names))
+
+    def test_release_versions_match_runtime_and_build_profiles(self) -> None:
+        locked = generate_sbom._locked_requirements(ROOT / "requirements-release.txt")
+        runtime = generate_sbom._locked_requirements(ROOT / "requirements-runtime.txt")
+        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        for name, version in runtime.items():
+            with self.subTest(package=name):
+                self.assertEqual(locked.get(name), version)
+        self.assertIn(
+            "-r requirements-runtime.txt",
+            (ROOT / "requirements-release.in").read_text(encoding="utf-8").splitlines(),
+        )
+        backend = project["build-system"]["requires"]
+        for filename in ("requirements-dev.txt", "requirements-build.txt", "requirements-release.in"):
+            profile = generate_sbom._locked_requirements(ROOT / filename)
+            with self.subTest(profile=filename):
+                self.assertEqual(profile.get("setuptools"), locked.get("setuptools"))
+                self.assertIn(f"setuptools=={profile['setuptools']}", backend)
+                for name, version in profile.items():
+                    self.assertEqual(locked.get(name), version)
+        requirements = [*project["project"]["dependencies"], *backend,
+                        *project["project"]["optional-dependencies"]["build"]]
+        for value in requirements:
+            requirement = Requirement(value)
+            name = re.sub(r"[-_.]+", "-", requirement.name).lower()
+            with self.subTest(requirement=value):
+                self.assertIn(name, locked)
+                self.assertIn(locked[name], requirement.specifier)
 
     def test_secret_audit_checks_web_files_and_env_example(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
