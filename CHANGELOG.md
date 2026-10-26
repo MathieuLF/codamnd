@@ -4,6 +4,10 @@ Toutes les versions officielles publiées sur GitHub doivent reprendre la sectio
 
 ## [Non publié]
 
+## [0.2.5] - 2026-10-26
+
+- Exige le PDF GL lorsque le contrôle est obligatoire et bloque un rapprochement requis désactivé dans la configuration.
+- Refuse les montants TXT dépassant la capacité MND avec une erreur de validation claire.
 ## [0.2.4] - 2026-10-25
 
 - Aligne Pillow 13.0.0 et setuptools 84.1.0 entre les environnements de développement, de construction et de publication.
