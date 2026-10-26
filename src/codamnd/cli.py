@@ -243,6 +243,8 @@ def _handle_gl_detail_reconciliation(
 def _collect_control_reconciliations(args, source_path: Path, config, *, source_bytes: bytes) -> list:
     reconciliations = []
     gl_detail_path = getattr(args, "gl_detail", None)
+    if getattr(args, "require_gl_detail", False) and not gl_detail_path:
+        raise ValidationFailed("Le rapport GL PDF est requis en mode bloquant. Ajoutez --gl-detail.")
     if gl_detail_path:
         require = bool(getattr(args, "require_gl_detail", False))
         reconciliations.append(

@@ -122,7 +122,11 @@ def parse_employeurd_line(line: str, line_number: int = 1) -> EmployeurDEntry:
         except InvalidOperation:
             errors.append(ErrorDetail("source_amount_decimal", "Le montant n'est pas un nombre décimal valide.", line_number, "amount"))
         else:
-            if amount != amount.quantize(CENT):
+            # Le champ source est plus large que la précision Decimal courante.
+            # Refuser les valeurs hors du champ MND avant toute quantification.
+            if abs(amount) >= Decimal("10000000000"):
+                errors.append(ErrorDetail("source_amount_range", "Le montant dépasse la capacité du champ MND.", line_number, "amount"))
+            elif amount != amount.quantize(CENT):
                 errors.append(ErrorDetail("source_amount_scale", "Le montant ne doit pas dépasser 2 décimales.", line_number))
 
     entry_date = None
