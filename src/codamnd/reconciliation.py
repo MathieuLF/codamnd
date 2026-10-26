@@ -24,6 +24,8 @@ def reconcile_gl_detail(
     gl_config = config.reports.gl_detail
     is_required = _is_required(gl_config.mode) if required is None else required
     if not gl_config.enabled:
+        if is_required:
+            raise ValidationFailed("Le rapprochement GL PDF requis est désactivé dans la configuration.")
         return ReconciliationResult(
             report_type="GL_DETAIL",
             status="skipped",
