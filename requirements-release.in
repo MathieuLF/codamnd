@@ -1,4 +1,4 @@
 # Verrou de construction Windows à résoudre et installer avec Python 3.14.
 -r requirements-runtime.txt
 packaging==26.3
-setuptools==84.1.0
+setuptools==84.2.1
